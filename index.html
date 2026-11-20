@@ -409,6 +409,9 @@ body:not(.viewing) .view-only { display: none !important; }
 .pills .mtab { display: block; line-height: 0; margin-top: 2px; }
 .pills .mtab .dgsvg { width: 44px; height: 30px; }
 .pills .dgl { display: block; font-size: 15px; color: var(--accent); }
+.pills .dgl.fT { color: var(--fT); } .pills .dgl.fS { color: var(--fS); } .pills .dgl.fD { color: var(--fD); } .pills .dgl.fX { color: var(--sub); }
+.pills .pl > button.pfT { box-shadow: inset 4px 0 0 var(--fT); } .pills .pl > button.pfS { box-shadow: inset 4px 0 0 var(--fS); } .pills .pl > button.pfD { box-shadow: inset 4px 0 0 var(--fD); }
+.pk-legend { font-size: 12px; margin: 2px 0 6px; line-height: 1.6; }
 .pills .cn2 { display: block; font-size: 12px; }
 .pills.plain button { color: var(--ink); font-weight: 400; }
 .grid7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
@@ -852,7 +855,17 @@ function funcOf(chord, ki) {
   if (!ki.minor && iv === 5 && qclass(p.quality) === 'min') return 'S'; // IVm(サブドミナントマイナー)
   return ok ? (FUNC[mode][iv] || 'X') : 'X';
 }
-const FUNC_NAME = { T: 'トニック', S: 'サブドミナント', D: 'ドミナント', X: 'ノンダイアトニック' };
+const FUNC_NAME = { T: 'トニック', S: 'サブドミナント', D: 'ドミナント', X: 'その他' };
+// 機能ごとの度数(画面の説明はすべてここから出して、表記をそろえる)。funcOf の判定と同じ並び
+const FUNC_DEGS = {
+  major: { T: 'I・IIIm・VIm', S: 'IV・IIm・IVm', D: 'V・VIIm7(b5)' },
+  minor: { T: 'Im・♭III', S: 'IVm・IIm7(b5)・♭VI・♭VII', D: 'V・Vm・VIIdim' },
+};
+const FUNC_FEEL = { T: '落ち着く', S: '広がる', D: '主音に戻りたくなる' };
+function funcLegendHTML(ki, feel = false) {
+  const d = FUNC_DEGS[ki && ki.minor ? 'minor' : 'major'];
+  return ['T', 'S', 'D'].map((f) => `<span class="f${f}">■${FUNC_NAME[f]}(${d[f]})${feel ? `=${FUNC_FEEL[f]}` : ''}</span>`).join(' ') + ' <span class="fX">■その他(KEYの外)</span>';
+}
 
 /* ---------- 曲の中のコードを順番に並べる ---------- */
 function chordSeq(song) {
@@ -1861,7 +1874,7 @@ function renderDispBar(s, ctx) {
   if (prefs.disp === 'both' && ctx.shift) legend.push(`両方:<b>${s.capo ? 'カポ' : 'チューニング'}に合わせた形</b>(実音)`);
   if (prefs.degree) {
     legend.push(ctx.ki ? `ディグリーの基準:${esc(ctx.ki.key)}${s.key ? '' : '(推定)'}` : 'ディグリーはKEYを決めると出ます');
-    legend.push('<span class="fT">■トニック</span> <span class="fS">■サブドミナント</span> <span class="fD">■ドミナント</span> <span class="fX">■その他</span>');
+    legend.push(funcLegendHTML(ctx.ki));
   }
   if (prefs.dgm !== false && !(prefs.bass && prefs.bassOnly)) legend.push(viewing ? '<span class="how"><i>TAB(▶)</i>を押すとコードの音が鳴ります</span>' : '<span class="how"><b>コード名</b>を押すと変更 ・ <i>TAB(▶)</i>を押すと音が鳴ります</span>');
   if (prefs.bass) legend.push(`<span style="color:var(--bass)">ベース欄は${prefs.bassTuned && s.tuning ? tuningLabel(s.tuning) + 'に合わせた形' : '実音'}。点線枠は手で変えた音</span>`);
@@ -2367,10 +2380,11 @@ function capoSuggestHTML(s) {
 // 候補のボタン:押すと決定。小さいTABつき、右の ▶ で音だけ鳴らせる
 const pill = (chord, label, degFirst) => {
   const c = viewCtx(cur), shape = c.shift ? transposeChord(chord, c.shift, c.shapeStyle) : chord;
+  const fn = c.ki ? funcOf(chord, c.ki) : ''; // トニック/サブドミナント/ドミナントの色分け(曲の画面のディグリーと同じ)
   const star = easyShape(shape) ? '<i class="easy">★</i>' : '';
   const sub = [c.shift ? `実音 ${chord}` : '', degFirst ? '' : label].filter(Boolean).join(' ・ ');
-  const head = degFirst ? `<span class="dgl">${esc(label)}</span><span class="cn2">${esc(shape)}${star}</span>` : `${esc(shape)}${star}`;
-  return `<span class="pl"><button data-pk="use" data-c="${esc(chord)}">${head}${sub ? `<small>${esc(sub)}</small>` : ''}${prefs.dgm !== false ? `<span class="mtab">${diagramSVG(shape, 0)}</span>` : ''}</button><button class="pl-play" data-pk="play" data-c="${esc(chord)}" aria-label="${esc(chord)}を鳴らす">▶</button></span>`;
+  const head = degFirst ? `<span class="dgl ${fn ? 'f' + fn : ''}">${esc(label)}</span><span class="cn2">${esc(shape)}${star}</span>` : `${esc(shape)}${star}`;
+  return `<span class="pl"><button data-pk="use" data-c="${esc(chord)}" class="${fn ? 'pf' + fn : ''}" ${fn ? `title="${FUNC_NAME[fn]}"` : ''}>${head}${sub ? `<small>${esc(sub)}</small>` : ''}${prefs.dgm !== false ? `<span class="mtab">${diagramSVG(shape, 0)}</span>` : ''}</button><button class="pl-play" data-pk="play" data-c="${esc(chord)}" aria-label="${esc(chord)}を鳴らす">▶</button></span>`;
 };
 // ディグリーから選ぶ:KEYの度数を押すと、そのKEYのコードが入る
 function degreeRows(ki, key) {
@@ -2398,7 +2412,7 @@ function renderPickLists() {
   } else {
     const vc = viewCtx(cur), shNote = [cur.capo ? `カポ${cur.capo}` : '', tuningLabel(cur.tuning)].filter(Boolean).join('+');
     $('pkSug').innerHTML = `<p class="muted" style="margin:0">KEY ${esc(sg.key)}${cur.key ? '' : '(推定)'}${cur.scale ? `・${esc(SCALES[cur.scale][0])}` : ''}を基準にしています${vc.shift ? `。${esc(shNote)}で押さえる形(押さえ方では KEY ${esc(transposeKey(sg.key, vc.shift))})で並べ、★は開放弦で押さえやすい形です` : '。★は開放弦で押さえやすい形です'}${pick.prev ? `。直前のコード:${esc(toInput(pick.prev))}` : ''}</p>`
-      + sg.groups.filter((g) => g.items.length).map((g) => `<h4>${esc(g.title)}</h4><div class="pills">${g.items.map((x) => pill(x.chord, x.label)).join('')}</div>`).join('');
+      + `<p class="pk-legend">${funcLegendHTML(keyInfo(sg.key))}</p>` + sg.groups.filter((g) => g.items.length).map((g) => `<h4>${esc(g.title)}</h4><div class="pills">${g.items.map((x) => pill(x.chord, x.label)).join('')}</div>`).join('');
   }
   // スケールのコード
   const key = effKey(cur), ki = keyInfo(key);
@@ -2409,14 +2423,14 @@ function renderPickLists() {
     const sc = cur.scale || (ki.minor ? 'naturalMinor' : 'major');
     const rows = scaleChords(ki.tonic, SCALES[sc][1], keyStyle(key));
     $('pkScaleTitle').textContent = `スケールのコード:${spell(ki.tonic, keyStyle(key))} ${SCALES[sc][0]}(${SCALE_INFO[sc][0]})${cur.scale ? '' : '・KEYから'}`;
-    $('pkScale').innerHTML = `<h4>3和音</h4><div class="pills">${rows.map((r) => pill(r.triad, degreeOf(r.triad, ki))).join('')}</div>
+    $('pkScale').innerHTML = `<p class="pk-legend">${funcLegendHTML(ki)}</p><h4>3和音</h4><div class="pills">${rows.map((r) => pill(r.triad, degreeOf(r.triad, ki))).join('')}</div>
       <h4>4和音</h4><div class="pills">${rows.map((r) => pill(r.seventh, degreeOf(r.seventh, ki))).join('')}</div>`;
   }
   // ディグリーから選ぶ
   {
     const key = effKey(cur), ki = keyInfo(key);
     $('pkDegTitle').textContent = ki ? `KEY ${key}${cur.key ? '' : '(推定)'}${cur.scale ? `・${SCALES[cur.scale][0]}` : ''}の度数から選びます。大きい字が度数です${scaleMismatch(cur) ? `(${scaleMismatch(cur)})` : ''}` : '';
-    $('pkDeg').innerHTML = ki ? degreeRows(ki, key) : '<p class="muted">KEYを決めると、I・IV・V などの度数からコードを選べます。</p>';
+    $('pkDeg').innerHTML = ki ? `<p class="pk-legend">${funcLegendHTML(ki)}</p>` + degreeRows(ki, key) : '<p class="muted">KEYを決めると、I・IV・V などの度数からコードを選べます。</p>';
   }
   // この曲で使ったコード
   const used = usedChords();
@@ -2503,7 +2517,7 @@ function openCircle() {
     <ul class="c5note">
       <li><b>隣どうしは相性がよい</b>(5度の関係)。濃い6つがこのKEYの基本のコード(外側がメジャー、内側がマイナー)</li>
       <li>薄い所も度数を見れば使い方がわかります。たとえば <b>♭VII</b>・<b>♭VI</b> は同じ主音の短調からの借用、<b>II</b>・<b>III</b> は次のコードへ向かうドミナント(II→V、III→VIm)としてよく使います</li>
-      <li><b>トニック</b>(I・VIm・IIIm)=落ち着く <b>サブドミナント</b>(IV・IIm)=広がる <b>ドミナント</b>(V)=Iに戻りたくなる</li>
+      <li>${funcLegendHTML(ki, true)}</li>
       <li>迷ったら「I → IV → V → I」。そこから IIm・IIIm・VIm に置きかえると色が変わります</li>
     </ul>
     <h3 class="c5h">定番の進行</h3>${progHTML}`;
