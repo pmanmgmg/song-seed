@@ -164,6 +164,14 @@ body.viewing button.chip::after { content: ''; }
 .chip-panel label { display: flex; flex-direction: column; font-size: 12px; color: var(--sub); gap: 2px; }
 .chip-panel select, .chip-panel input { color: var(--ink); }
 .chip-panel .row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.scale-help { margin-top: 8px; }
+.scale-help > p { margin: 0 0 6px; font-size: 13px; line-height: 1.5; }
+.scale-help summary { cursor: pointer; font-size: 13px; color: var(--accent); padding: 4px 0; }
+.sh-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.45; }
+.sh-row.on { background: var(--accent-soft); border-radius: 6px; }
+.sh-row .sh-txt { flex: 1; min-width: 0; }
+.sh-row .sh-feel { color: var(--accent); font-weight: 700; }
+.sh-row button { flex: none; padding: 4px 10px; }
 .chip-panel .close { align-self: flex-end; font-size: 13px; padding: 3px 12px; }
 .dispbar .lbl2 { font-size: 12px; color: var(--sub); width: 100%; margin-bottom: -2px; }
 .meta-form {
@@ -704,6 +712,17 @@ const SCALES = {
   mixolydian: ['ミクソリディアン', [0, 2, 4, 5, 7, 9, 10]],
   lydian: ['リディアン', [0, 2, 4, 6, 7, 9, 11]],
   phrygian: ['フリジアン', [0, 1, 3, 5, 7, 8, 10]],
+};
+// スケールの感じ(選ぶときの説明)。[ひとことの感じ, くわしく]
+const SCALE_INFO = {
+  major: ['明るく素直', '童謡や J-POP の大半はこれ。迷ったらこれ(「かえるの歌」もメジャー)。'],
+  naturalMinor: ['暗め・切ない', 'マイナーの基本。バラードや哀愁のある曲に。'],
+  harmonicMinor: ['エキゾチック・クラシカル', 'マイナーの7番目の音を半音上げた形。V が7th(Am なら E7)になり、主音へ強く戻る。中東風・ネオクラシカルな響き。'],
+  melodicMinor: ['暗さの中に明るさ', 'マイナーの6・7番目を上げた形。上がっていくメロディがなめらか。ジャズでよく使う。'],
+  dorian: ['おしゃれな哀愁', 'マイナーだけど6番目が明るい。IV がメジャー(Am なら D)。ファンク・フュージョン・ロックのソロに。'],
+  mixolydian: ['ブルージー・ゆるい明るさ', 'メジャーだけど7番目が下がる。♭VII(C なら B♭)が特徴。ロック・ブルース・カントリーに。'],
+  lydian: ['浮遊感・夢見る感じ', 'メジャーの4番目を上げた形。II がメジャー(C なら D)。映画音楽やドリーミーな曲に。'],
+  phrygian: ['スパニッシュ・緊張感', 'マイナーの2番目が下がる。♭II(Am なら B♭)が特徴。フラメンコやヘヴィな曲に。'],
 };
 const NATURALS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const BASS_NOTES = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B'];
@@ -1587,6 +1606,41 @@ function playFrets(fr) {
   let k = 0;
   fr.forEach((f, i) => { if (f < 0) return; const s = c.createBufferSource(); s.buffer = pluckBuf(c, OPEN_MIDI[i] + f); s.connect(out); s.start(t + k * 0.014); s.stop(t + 2.2); chordAudio.srcs.push(s); k++; });
 }
+// スケール選びの説明:選んでいるスケールの感じと、全部の一覧(▶で音を鳴らせる・「使う」で選べる)
+function scaleTonic(s) { const ki = keyInfo(effKey(s)); return ki ? ki.tonic : 0; }
+// 7音を C〜B の文字が1つずつになるように書く(C のマイナーは D# ではなく Eb)
+function scaleNotes(s, k) {
+  const t = scaleTonic(s), name = spell(t, keyStyle(effKey(s))), li = NATURALS.indexOf(name[0]);
+  const acc = { 0: '', 1: '#', 2: '##', 11: 'b', 10: 'bb' };
+  return SCALES[k][1].map((iv, i) => { const L = NATURALS[(li + i) % 7], d = mod12(t + iv - NOTE_PC[L]); return L + (acc[d] ?? '?'); }).join(' ');
+}
+function scaleHelpHTML(s) {
+  const ki = keyInfo(effKey(s));
+  const curK = s.scale || (ki ? (ki.minor ? 'naturalMinor' : 'major') : '');
+  const now = s.scale ? `<b>${SCALES[s.scale][0]}</b>:${SCALE_INFO[s.scale][0]}。${SCALE_INFO[s.scale][1]}`
+    : `<b>KEYに合わせる</b>:KEY がメジャーならメジャー、マイナーならナチュラルマイナーとして扱います。${ki ? '' : '(KEY が未設定のあいだは C で鳴らします)'}`;
+  return `<div class="scale-help"><p class="muted">${now}</p>
+    <details id="scaleList" ${scaleListOpen ? 'open' : ''}><summary>スケールそれぞれの感じ(▶で音が鳴ります)</summary>
+    ${Object.entries(SCALES).map(([k, v]) => `<div class="sh-row ${curK === k ? 'on' : ''}">
+      <button class="sh-play" data-act="scaleplay" data-v="${k}" aria-label="${v[0]}を鳴らす">▶</button>
+      <div class="sh-txt"><b>${v[0]}</b> <span class="sh-feel">${SCALE_INFO[k][0]}</span><br><span class="muted">${scaleNotes(s, k)} ・ ${SCALE_INFO[k][1]}</span></div>
+      <button data-act="setscale" data-v="${k}" class="${s.scale === k ? 'on' : ''}">${s.scale === k ? '選択中' : '使う'}</button></div>`).join('')}
+    </details></div>`;
+}
+let scaleListOpen = false;
+document.addEventListener('toggle', (ev) => { if (ev.target && ev.target.id === 'scaleList') scaleListOpen = ev.target.open; }, true);
+const scaleVoices = [];
+function playScale(s, k) {
+  const c = audioCtx(), t0 = c.currentTime + 0.05, base = 60 + scaleTonic(s);
+  scaleVoices.splice(0).forEach((o) => { try { o.stop(); } catch (e) {} });
+  const ivs = [...SCALES[k][1], 12];
+  ivs.forEach((iv, i) => {
+    const t = t0 + i * 0.26, o = c.createOscillator(), g = c.createGain();
+    o.type = 'triangle'; o.frequency.value = 440 * Math.pow(2, (base + iv - 69) / 12);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.35, t + 0.015); g.gain.setTargetAtTime(0, t + 0.2, 0.05);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 0.5); scaleVoices.push(o);
+  });
+}
 // パート(または曲全体)のコードを順に鳴らす。演奏のみは小節どおり、歌詞ありは1コード1小節として鳴らす
 function chordEvents(secs) {
   const n = beatsPerBar(cur), spb = 60 / cur.tempo, ev = [];
@@ -1674,8 +1728,8 @@ function chipPanelHTML(s) {
       </select></label>
       <label ${tip('任意。決めると、コード入力の画面に「スケールのコード」(ダイアトニックコード)が並びます。未設定ならKEYから自動で出します')}>スケール(任意)<select data-f="scale">
         <option value="">KEYに合わせる</option>
-        ${Object.entries(SCALES).map(([k, v]) => `<option value="${k}" ${s.scale === k ? 'selected' : ''}>${v[0]}</option>`).join('')}
-      </select></label></div>`;
+        ${Object.entries(SCALES).map(([k, v]) => `<option value="${k}" ${s.scale === k ? 'selected' : ''}>${v[0]}:${SCALE_INFO[k][0]}</option>`).join('')}
+      </select></label></div>${scaleHelpHTML(s)}`;
   else if (chipOpen === 'tempo') body = `<label>テンポ(BPM)<span class="stepper">
         <button data-act="tempo" data-d="-1" aria-label="テンポを1下げる" ${tip('テンポを1下げます')}>−</button>
         <input data-f="tempo" type="number" inputmode="numeric" min="20" max="400" value="${s.tempo}">
@@ -1968,6 +2022,8 @@ document.addEventListener('click', async (ev) => {
     case 'undo': undo(); break;
     case 'redo': redo(); break;
     case 'toggle-view': viewing = !viewing; renderEditor(); break;
+    case 'scaleplay': playScale(cur, el.dataset.v); break;
+    case 'setscale': cur.scale = el.dataset.v; touch(); renderEditor(); break;
     case 'export': exportBackup(); break;
     case 'import': $('importFile').click(); break;
     case 'del-song': if (await deleteSongById(cur.id)) go(''); break;
@@ -2274,7 +2330,7 @@ function renderPickLists() {
   } else {
     const sc = cur.scale || (ki.minor ? 'naturalMinor' : 'major');
     const rows = scaleChords(ki.tonic, SCALES[sc][1], keyStyle(key));
-    $('pkScaleTitle').textContent = `スケールのコード:${spell(ki.tonic, keyStyle(key))} ${SCALES[sc][0]}${cur.scale ? '' : '(KEYから)'}`;
+    $('pkScaleTitle').textContent = `スケールのコード:${spell(ki.tonic, keyStyle(key))} ${SCALES[sc][0]}(${SCALE_INFO[sc][0]})${cur.scale ? '' : '・KEYから'}`;
     $('pkScale').innerHTML = `<h4>3和音</h4><div class="pills">${rows.map((r) => pill(r.triad, degreeOf(r.triad, ki))).join('')}</div>
       <h4>4和音</h4><div class="pills">${rows.map((r) => pill(r.seventh, degreeOf(r.seventh, ki))).join('')}</div>`;
   }
@@ -4323,102 +4379,6 @@ async function importBackup(file) {
   route();
 }
 
-/* ---------- 見本の曲「かえるの歌」 ---------- */
-// メロディはドイツ民謡(自由に使える)。よく知られた日本語の歌詞は著作権が残っているため、歌詞の欄は音名(ドレミ)にしている
-// 初めての端末にも、すでに使っている端末にも1回だけ入れる。消したら二度と入れない
-const LS_SAMPLE = 'songseed.sampleKaeru';
-const KAERU = {
-  tempo: 100,
-  intro: [['C'], ['G7']],
-  // 各行:歌詞(音名)と、[コード, 文字の位置, 拍]
-  lines: [
-    ['ドレミファ ミレド', [['C', 0, 4], ['G7', 6, 2], ['C', 8, 2]]],
-    ['ミファソラ ソファミ', [['C', 0, 4], ['G7', 6, 2], ['C', 9, 2]]],
-    ['ド ド ド ド', [['C', 0, 4], ['C', 4, 4]]],
-    ['ドドレレミミファファ ミレド', [['C', 0, 4], ['G7', 11, 2], ['C', 13, 2]]],
-  ],
-  // メロディ:[MIDI, 拍]。0 は休み。前奏2小節のあとから
-  melody: [[72, 1], [74, 1], [76, 1], [77, 1], [76, 1], [74, 1], [72, 2],
-    [76, 1], [77, 1], [79, 1], [81, 1], [79, 1], [77, 1], [76, 2],
-    [72, 1], [0, 1], [72, 1], [0, 1], [72, 1], [0, 1], [72, 1], [0, 1],
-    [72, .5], [72, .5], [74, .5], [74, .5], [76, .5], [76, .5], [77, .5], [77, .5], [76, 1], [74, 1], [72, 2]],
-};
-async function renderSampleAudio(kind, chords, total) {
-  const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-  if (!Off) return null;
-  const sr = 22050, spb = 60 / KAERU.tempo, oc = new Off(1, Math.ceil((total + 1) * sr), sr);
-  const out = oc.createGain(); out.gain.value = 0.5; out.connect(oc.destination);
-  if (kind === 'melody') { // やわらかい笛のような音
-    let t = 2 * 4 * spb;
-    for (const [m, b] of KAERU.melody) {
-      const d = b * spb;
-      if (m) {
-        const f = 440 * Math.pow(2, (m - 69) / 12), o = oc.createOscillator(), o2 = oc.createOscillator(), g = oc.createGain();
-        o.type = 'triangle'; o.frequency.value = f; o2.type = 'sine'; o2.frequency.value = f * 2;
-        const g2 = oc.createGain(); g2.gain.value = 0.15; o2.connect(g2); g2.connect(g);
-        o.connect(g); g.connect(out);
-        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.7, t + 0.02); g.gain.setTargetAtTime(0.45, t + 0.03, 0.08);
-        g.gain.setTargetAtTime(0, t + d * 0.85, 0.03);
-        o.start(t); o2.start(t); o.stop(t + d + 0.2); o2.stop(t + d + 0.2);
-      }
-      t += d;
-    }
-  } else { // ギターのコード(2拍ごとに刻む)
-    for (const e of chords) {
-      const vs = voicings(e.chord);
-      if (!vs.length) continue;
-      for (let b = 0; b * spb < e.dur - 0.01; b += 2) {
-        const at = e.t + b * spb;
-        let k = 0;
-        vs[0].fr.forEach((fr, i) => {
-          if (fr < 0) return;
-          const src = oc.createBufferSource(), g = oc.createGain();
-          src.buffer = pluckBuf(oc, OPEN_MIDI[i] + fr); g.gain.value = (b ? 0.3 : 0.5) * (0.85 + 0.15 * Math.random());
-          src.connect(g); g.connect(out); src.start(at + k * 0.014); src.stop(at + 2.2); k++;
-        });
-      }
-    }
-  }
-  const buf = await new Promise((res, rej) => { const pr = oc.startRendering(); if (pr && pr.then) pr.then(res, rej); else oc.oncomplete = (ev) => res(ev.renderedBuffer); });
-  return wavBlob(buf);
-}
-async function addSampleSong() {
-  if (!storageOk || lsGet(LS_SAMPLE)) return false;
-  try {
-    const now = Date.now(), spb = 60 / KAERU.tempo, bar = 4 * spb;
-    const intro = newSection('前奏', 'bars');
-    intro.bars = KAERU.intro.map((b) => b.map((c) => ({ chord: c, bass: '' })));
-    const verse = newSection('Aメロ', 'lyrics');
-    verse.label = 'うた';
-    verse.lines = KAERU.lines.map(([text, cs]) => ({ text, chords: cs.map(([chord, pos, beats]) => ({ pos, chord, bass: '', beats })) }));
-    const s = {
-      id: uid(), title: 'かえるの歌(見本)', band: '見本', folder: '', key: 'C', scale: '', tempo: KAERU.tempo, timeSig: '4/4', capo: 0, tuning: 0,
-      sections: [intro, verse],
-      full: { markers: [{ id: uid(), start: 0, len: 2, secId: intro.id, label: '', color: '' }, { id: uid(), start: 2, len: 8, secId: verse.id, label: '', color: '' }], tracks: [] },
-      createdAt: now, updatedAt: now,
-    };
-    // 通し録音:メロディとコード伴奏を、アプリの中で音を作って入れる
-    const chords = [];
-    let t = 0;
-    KAERU.intro.forEach((b) => b.forEach((c) => { chords.push({ chord: c, t, dur: bar / b.length }); t += bar / b.length; }));
-    KAERU.lines.forEach(([, cs]) => cs.forEach(([c, , beats]) => { chords.push({ chord: c, t, dur: beats * spb }); t += beats * spb; }));
-    const total = t;
-    for (const [kind, name, icon, color] of [['melody', 'メロディ', 'keys', 'sky'], ['chords', 'コード伴奏', 'ag', 'peach']]) {
-      const blob = await renderSampleAudio(kind, chords, total);
-      if (!blob) continue;
-      const tkId = uid(), dur = Math.round((total + 1) * 100) / 100;
-      await recPut({ id: tkId, songId: s.id, secId: '__full', name: `${name} テイク1`, mime: 'audio/wav', dur, createdAt: now, blob });
-      s.full.tracks.push({ id: uid(), name, vol: 1, icon, color, mute: false, solo: false, muteBySolo: false, active: tkId,
-        takes: [{ id: tkId, name: `${name} テイク1`, no: 1, offset: 0, trimStart: 0, length: total, fadeIn: 0, fadeOut: 0, dur }], comp: [], saved: [] });
-    }
-    const ns = normalizeSong(s);
-    await dbPut(clone(ns));
-    songs.push(ns);
-    lsSet(LS_SAMPLE, String(Date.now())); // 入れ終わってから印を付ける(途中で閉じたら次に開いたとき入れ直す)
-    return true;
-  } catch (e) { console.error('見本の曲を入れられませんでした', e); lsSet(LS_SAMPLE, 'failed'); return false; } // 失敗した端末で毎回試さない
-}
-
 /* ---------- 起動 ---------- */
 window.addEventListener('hashchange', route);
 window.addEventListener('pagehide', () => { flushSave(); });
@@ -4439,8 +4399,6 @@ if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
   }
   await route();
   if (!lsGet(LS_TUTORIAL)) openTutorial(0);
-  // 見本の曲は、画面を出してから裏で作る(音を作るのに少し時間がかかるため)
-  addSampleSong().then((added) => { if (added && !cur && !fullView) renderList(); });
 })();
 </script>
 </body>
