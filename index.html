@@ -460,7 +460,16 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--sub); marg
 .ruler { position: sticky; top: 0; z-index: 4; background: var(--panel); height: 24px; border-bottom: 1px solid var(--line); cursor: ew-resize; touch-action: none; }
 #tl { max-height: max(200px, calc(100dvh - var(--topH, 52px) - var(--headH, 200px) - var(--panH, 0px) - 14px)); overflow: auto; }
 #tl .mrow { position: sticky; top: 24px; z-index: 4; background: var(--panel); }
-.clip-panel.dock { position: sticky; bottom: 0; z-index: 8; max-height: 42vh; overflow-y: auto; box-shadow: 0 -6px 18px rgba(0,0,0,.35); border-color: var(--chord); }
+.clip-panel.dock { position: sticky; bottom: 0; z-index: 8; max-height: max(120px, min(42vh, calc(100dvh - var(--topH, 52px) - var(--headH, 200px) - 200px))); overflow-y: auto; box-shadow: 0 -6px 18px rgba(0,0,0,.35); border-color: var(--chord); padding-top: 0; }
+/* 見出し(たたむ・×)は欄の中でスクロールしても上に残す。スマホで上の固定部分に隠れて押せなかったため */
+.clip-panel.dock .cp-head { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 8px 0 4px; margin: 0; }
+/* 上の固定部分(再生・設定・ピン留め)は画面の半分まで。超える分は中でスクロールし、トラックと数値の欄の場所を残す */
+.fx-head { max-height: 50dvh; overflow-y: auto; overscroll-behavior: contain; }
+.clip-panel.dock.folded { padding: 4px 10px; }
+.clip-panel .cp-head { flex-wrap: nowrap; }
+.clip-panel .cp-head .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.clip-panel .cp-head .foldh { font-size: 14px; color: var(--ink); white-space: nowrap; flex: none; }
+.clip-panel .cp-x { font-size: 18px; padding: 0 10px; flex: none; }
 /* テイクの数値の欄は画面の下に固定。上の固定部分とトラックの欄の間でページをスクロールしなくても、帯と数値を同時に見られる */
 .gridov { position: absolute; left: 0; top: 0; height: 100%; pointer-events: none; z-index: 1; }
 .gridov .gb { stroke: var(--line); stroke-width: 1; }
@@ -978,6 +987,8 @@ function normalizeFull(f) {
         id: String(k.id), name: String(k.name || 'テイク'), no: clampInt(k.no, 0, 9999, 0),
         offset: num(k.offset, 0, 36000, 0), trimStart: num(k.trimStart, 0, 36000, 0), length: num(k.length, 0.01, 36000, 1),
         fadeIn: num(k.fadeIn, 0, 600, 0), fadeOut: num(k.fadeOut, 0, 600, 0), dur: num(k.dur, 0, 36000, 0),
+        ...(k.info ? { info: String(k.info).slice(0, 80) } : {}), // 録れた条件(読み込み直しても残す)
+        ...(Number(k.gain) > 1 ? { gain: num(k.gain, 1, 16, 1) } : {}), // 音量をそろえた倍率
       })) : [];
       return {
         id: String(t.id || uid()), name: String(t.name || `トラック${i + 1}`), vol: num(t.vol, 0, 1.5, 1),
@@ -1569,7 +1580,7 @@ function playChordSeq(secs, id) {
   chordAudio.seq = { id, t0, ev, end };
   const tick = () => {
     if (!chordAudio.seq) return;
-    const now = c.currentTime - t0;
+    const now = c.currentTime - outLatency(c) - t0;
     document.querySelectorAll('.cplay').forEach((x) => x.classList.remove('cplay'));
     const e = ev.filter((x) => x.t <= now).pop();
     if (e) { const el = document.querySelector(`.sec[data-sec="${e.sec}"] ${e.sel}`); if (el) el.classList.add('cplay'); }
@@ -2682,6 +2693,47 @@ function pickMime() {
   if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
   return list.find((m) => MediaRecorder.isTypeSupported(m)) || '';
 }
+// 録音の音質:何も指定しないと端末まかせの低めのビットレートになることがあるので、高めを指定する。
+// マイクは音声通話向けの加工(エコー除去・雑音除去・自動音量)を切り、1ch・48kHz を希望する(できない端末では無視される)
+const MIC_BASE = { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 1 }, sampleRate: { ideal: 48000 } } };
+// 選んだマイクで開く。選んだマイクが見つからなければ、端末の標準のマイクで開き直す
+async function openMic() {
+  const base = { ...MIC_BASE.audio };
+  if (prefs.micId) {
+    try { return await navigator.mediaDevices.getUserMedia({ audio: { ...base, deviceId: { exact: prefs.micId } } }); }
+    catch (e) { if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) throw e; showToast('選んだマイクが見つからないので、標準のマイクで録ります'); }
+  }
+  return navigator.mediaDevices.getUserMedia({ audio: base });
+}
+let micList = [];
+async function refreshMics() {
+  try { micList = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput'); } catch (e) { micList = []; }
+  return micList;
+}
+// 入力(マイク)を選ぶ欄。名前はマイクを一度許可したあとに出る
+function micSelectHTML(attr, disabled) {
+  const named = micList.some((d) => d.label);
+  const opts = micList.filter((d) => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
+  return `<label class="cin" ${tip('録音に使うマイク。イヤホンのマイクで音がこもるときは、本体のマイクに切り替えます(端末によっては切り替えられません)')}>入力<select ${attr}="mic" ${disabled ? 'disabled' : ''} style="max-width:180px">
+    <option value="">標準(端末まかせ)</option>${opts.map((d, i) => `<option value="${esc(d.deviceId)}" ${prefs.micId === d.deviceId ? 'selected' : ''}>${esc(d.label || 'マイク' + (i + 1))}</option>`).join('')}
+    ${named ? '' : '<option value="" disabled>(一度録音すると名前が出ます)</option>'}</select></label>`;
+}
+function makeRecorder(stream, mime) {
+  const bps = /opus|webm|ogg/.test(mime) ? 192000 : 256000;
+  const tries = [mime ? { mimeType: mime, audioBitsPerSecond: bps } : { audioBitsPerSecond: bps }, mime ? { mimeType: mime } : null, null];
+  for (const o of tries) { try { return o ? new MediaRecorder(stream, o) : new MediaRecorder(stream); } catch (e) { /* 次の指定で試す */ } }
+  return new MediaRecorder(stream);
+}
+// 実際に録れた条件(端末が決める)。音が悪いときの手がかりとしてテイクに残す
+function recInfo(stream, mr) {
+  let st = {};
+  try { st = stream.getAudioTracks()[0].getSettings() || {}; } catch (e) { st = {}; }
+  const kb = mr && mr.audioBitsPerSecond ? Math.round(mr.audioBitsPerSecond / 1000) + 'kbps' : '';
+  const fmt = mr && mr.mimeType ? (/opus/.test(mr.mimeType) ? 'Opus' : /mp4|aac/.test(mr.mimeType) ? 'AAC' : mr.mimeType) : '';
+  let lbl = '';
+  try { lbl = stream.getAudioTracks()[0].label || ''; } catch (e) { lbl = ''; }
+  return [lbl ? lbl.slice(0, 24) : '', st.sampleRate ? (st.sampleRate / 1000) + 'kHz' : '', st.channelCount ? st.channelCount + 'ch' : '', fmt, kb, st.echoCancellation ? 'エコー除去ON' : ''].filter(Boolean).join('・');
+}
 const extOf = (mime) => (/mp4|aac|m4a/.test(mime) ? 'm4a' : /ogg/.test(mime) ? 'ogg' : /wav/.test(mime) ? 'wav' : 'webm');
 async function openRec(sec) {
   rec.open = true; rec.secId = sec.id; rec.state = 'idle';
@@ -2703,10 +2755,11 @@ function renderRec() {
   const oldUrls = rec.urls; rec.urls = []; // 古い音声の参照は、画面を差し替えたあとで消す
   const takesHTML = rec.takes.length ? rec.takes.map((t, i) => {
     const u = URL.createObjectURL(t.blob); rec.urls.push(u);
-    return `<div class="take"><div class="tt"><span class="nm">${esc(t.name)}</span><span class="muted">${fmtSec(t.dur || 0)}・${fmtDate(t.createdAt)}</span>
+    return `<div class="take"><div class="tt"><span class="nm">${esc(t.name)}</span><span class="muted">${fmtSec(t.dur || 0)}・${fmtDate(t.createdAt)}${t.info ? '・' + esc(t.info) : ''}${t.gain ? `・音量 ${dbStr(t.gain)}` : ''}</span>
       <button data-rk="dl" data-i="${i}">書き出し</button><button class="danger" data-rk="del" data-i="${i}">削除</button></div>
-      <audio controls preload="metadata" src="${u}"></audio></div>`;
+      <audio controls preload="metadata" src="${u}" ${t.gain ? `data-gain="${t.gain}"` : ''}></audio></div>`;
   }).join('') : '<p class="muted">まだテイクはありません。</p>';
+  setTimeout(bindGainAudio, 0);
   $('recIn').innerHTML = `
     <div class="where">${esc(cur.title || '(無題の曲)')} ・ ${esc(sec.label || sec.type)} の録音</div>
     ${supported ? `
@@ -2717,6 +2770,7 @@ function renderRec() {
     </div>
     <div class="rec-opts">
       ${countInHTML('data-rk', st !== 'idle')}
+      ${micSelectHTML('data-rk', st !== 'idle')}
       <button data-rk="click" class="${prefs.recClick ? 'on' : ''}" ${st !== 'idle' ? 'disabled' : ''} ${tip('録音しているあいだもクリック(メトロノーム)を鳴らし続けます。イヤホンで聞いてください')}>録音中のクリック ${prefs.recClick ? 'ON' : 'OFF'}</button>
       <button data-rk="metset" ${tip('クリックの音色・拍の頭の音・強弱・刻みを変えます')}>⚙ クリックの設定</button>
     </div>
@@ -2732,7 +2786,7 @@ async function startRecording() {
   const sec = findSec(rec.secId);
   rec.state = 'wait'; renderRec();
   try {
-    rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    rec.stream = await openMic(); refreshMics();
   } catch (e) {
     rec.state = 'idle'; renderRec();
     const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
@@ -2743,7 +2797,7 @@ async function startRecording() {
   const begin = () => {
     if (rec.state !== 'count' && rec.state !== 'wait') return;
     const mime = pickMime();
-    try { rec.mr = mime ? new MediaRecorder(rec.stream, { mimeType: mime }) : new MediaRecorder(rec.stream); } catch (e) { rec.mr = new MediaRecorder(rec.stream); }
+    rec.mr = makeRecorder(rec.stream, mime); rec.info = recInfo(rec.stream, rec.mr);
     rec.chunks = [];
     rec.mr.ondataavailable = (ev) => { if (ev.data && ev.data.size) rec.chunks.push(ev.data); };
     rec.mr.onstop = () => saveTake(sec, rec.mr.mimeType || mime || 'audio/mp4');
@@ -2784,13 +2838,25 @@ async function saveTake(sec, mime) {
   releaseMic();
   const blob = new Blob(rec.chunks, { type: mime });
   const n = rec.takes.reduce((mx, t) => Math.max(mx, t.no || Number((/テイク(\d+)$/.exec(t.name) || [])[1]) || 0), 0) + 1; // 途中のテイクを消しても番号が重ならないように
-  const take = { id: uid(), songId: cur.id, secId: sec.id, no: n, name: `${sec.label || sec.type} テイク${n}`, blob, mime, dur, createdAt: Date.now() };
+  const take = { id: uid(), songId: cur.id, secId: sec.id, no: n, name: `${sec.label || sec.type} テイク${n}`, blob, mime, dur, createdAt: Date.now(), info: rec.info || '' };
+  if (autoNorm()) { try { const g = normGain(await decodeBlob(blob)); if (g > 1.01) take.gain = Math.round(g * 1000) / 1000; } catch (e) { /* 読めなければそのまま */ } }
   if (storageOk) { try { await recPut(take); } catch (e) { console.error(e); showToast('⚠ 録音を保存できませんでした'); } }
   rec.takes.push(take);
   recCount[sec.id] = (recCount[sec.id] || 0) + 1;
   rec.state = 'idle';
   if (rec.open) renderRec(); else if (cur) renderEditor(); // 録音中に閉じたときも本数の表示を更新する
   showToast(`${take.name} を保存しました`);
+}
+// パートのテイクは <audio> で鳴らすので、そろえた音量(1倍より大きい)は Web Audio を通して掛ける
+function bindGainAudio() {
+  document.querySelectorAll('#recIn audio[data-gain]').forEach((a) => {
+    if (a.dataset.bound) return;
+    a.dataset.bound = '1';
+    a.addEventListener('play', () => {
+      if (a._gn) return;
+      try { const c = audioCtx(), src = c.createMediaElementSource(a), g = c.createGain(); g.gain.value = Number(a.dataset.gain) || 1; src.connect(g); g.connect(c.destination); a._gn = g; } catch (e) { console.error(e); }
+    });
+  });
 }
 function closeRec() {
   if (rec.state === 'rec' || rec.state === 'count' || rec.state === 'wait') stopRecording();
@@ -2802,6 +2868,10 @@ function closeRec() {
   if (!pick) $('sheetBg').classList.remove('open');
   if (cur) renderEditor();
 }
+$('recSheet').addEventListener('change', (ev) => {
+  const el = ev.target;
+  if (el.dataset && el.dataset.rk === 'mic') { if (el.value) prefs.micId = el.value; else delete prefs.micId; savePrefs(); }
+});
 $('recSheet').addEventListener('click', async (ev) => {
   const b = ev.target.closest('[data-rk]');
   if (!b || b.disabled) return;
@@ -2854,6 +2924,13 @@ function partAt(t) {
   return hits.length ? markerName(hits[hits.length - 1]) : '';
 }
 const latency = () => num(prefs.latencyMs, -500, 1000, 0) / 1000;
+// 鳴らしてから耳に届くまでの遅れ(秒)。Bluetooth のイヤホンでは0.2秒前後になる。
+// 再生位置の線や光るコードは、この分だけ遅らせて「聞こえている所」に合わせる。手で決めた値があればそれを使う
+function outLatency(c) {
+  if (prefs.outLatMs !== undefined && prefs.outLatMs !== '' && prefs.outLatMs !== null) return num(prefs.outLatMs, 0, 1000, 0) / 1000;
+  return c ? Math.max(0, (Number(c.outputLatency) || 0) + (Number(c.baseLatency) || 0)) : 0;
+}
+const autoOutMs = () => Math.round(((metro.ctx && ((Number(metro.ctx.outputLatency) || 0) + (Number(metro.ctx.baseLatency) || 0))) || 0) * 1000);
 const fmtPos = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`;
 function barBeat(t) {
   const spb = 60 / cur.tempo, n = beatsPerBar(cur), b = Math.floor(t / spb + 1e-6);
@@ -2886,6 +2963,15 @@ async function decodeBlob(blob) {
   const c = fullCtx(), ab = await blob.arrayBuffer();
   return new Promise((res, rej) => { const p = c.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
 }
+// 音量をそろえる(ノーマライズ):いちばん大きい所が −1dB になるまで上げる倍率。元の録音は変えず、鳴らすときに掛ける
+function normGain(buf) {
+  let peak = 0;
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < d.length; i++) { const v = d[i] < 0 ? -d[i] : d[i]; if (v > peak) peak = v; } }
+  if (peak < 0.001) return 1; // ほぼ無音は上げない(雑音だけが大きくなるので)
+  return Math.max(1, Math.min(16, 0.891 / peak));
+}
+const autoNorm = () => prefs.autoNorm !== false;
+const dbStr = (g) => `${g >= 1 ? '+' : ''}${(20 * Math.log10(g)).toFixed(1)}dB`;
 function makePeaks(buf) { // 1秒あたり200点の最大振幅(波形の表示用)
   const d = buf.getChannelData(0), step = Math.max(1, Math.floor(buf.sampleRate / 200)), out = new Float32Array(Math.ceil(d.length / step));
   for (let i = 0; i < out.length; i++) { let m = 0; for (let j = i * step, e = Math.min(d.length, j + step); j < e; j++) { const v = Math.abs(d[j]); if (v > m) m = v; } out[i] = m; }
@@ -3045,6 +3131,8 @@ function renderFull() {
       <button class="foldh" data-fa="fold" aria-expanded="${!isFolded()}" ${tip('カウントイン・グリッド・表示の幅などの設定をたたんで、画面を広く使います。再生・録音の行は残ります')}><span class="chev ${isFolded() ? '' : 'open'}"></span>録音・表示の設定</button>
       <div class="rec-opts">
         ${countInHTML('data-fa', busy)}
+        ${micSelectHTML('data-ff', busy)}
+        <button data-fa="autonorm" class="${autoNorm() ? 'on' : ''}" ${tip('録り終えたテイクの音量を、自動で音割れしない所まで上げます(元の録音はそのまま。テイクごとに戻せます)')}>音量の自動そろえ ${autoNorm() ? 'ON' : 'OFF'}</button>
         <button data-fa="click" class="${prefs.recClick ? 'on' : ''}" ${busy ? 'disabled' : ''} ${tip('再生中・録音中にクリック(メトロノーム)を鳴らします。曲の頭を1小節目1拍目としてそろえます')}>クリック ${prefs.recClick ? 'ON' : 'OFF'}</button>
         <button data-fa="metset" ${tip('クリックの音色・拍の頭の音・強弱・刻み')}>⚙ クリックの設定</button>
       </div>
@@ -3080,6 +3168,7 @@ function renderFull() {
         <h3>書き出し・設定</h3>
         <div class="row">
           <button data-fa="export" ${tip('使うテイクを全トラック重ねて、1本の音声ファイル(WAV)にします。ミュート・ソロ・音量・フェードも反映します')}>⤓ 1本の音声に書き出し(WAV)</button>
+          <label class="muted" ${tip('再生位置の線が、聞こえている音より先に進んでしまうとき(Bluetooth のイヤホンなど)、その遅れ(ミリ秒)を入れると線を音に合わせます。空欄なら端末が知らせる値を使います。端末ごとの設定です')}>再生の遅れ <input type="number" data-ff="outlat" value="${prefs.outLatMs ?? ''}" placeholder="自動 ${autoOutMs()}" step="10" min="0" max="1000" style="width:90px"> ms</label>
           <label class="muted" ${tip('録った音が伴奏やクリックより遅れて聞こえるとき、その分(ミリ秒)を入れると、次の録音から前へずらして置きます。端末ごとの設定です')}>録音の遅れ補正 <input type="number" data-ff="lat" value="${num(prefs.latencyMs, -500, 1000, 0)}" step="5" style="width:80px"> ms</label>
         </div>
         <p class="muted">録音はこの端末の中に保存されます。別の端末へ移すときは、曲の一覧の「バックアップ書き出し」で「録音も入れる」を選んでください。重ね録りやクリックを使うときはイヤホンで(スピーカーの音もマイクに入ります)。</p>
@@ -3119,8 +3208,17 @@ function renderClipPanel() {
   const { tr, tk } = findTake(fx.sel.tr, fx.sel.tk);
   if (!tk) return '';
   const field = (k, label, help) => `<label ${tip(help)}>${label}<input type="number" data-fx="${k}" step="0.01" min="0" value="${tk[k].toFixed(3)}"></label>`;
+  const open = !prefs.clipFold;
+  const head = `<div class="row cp-head"><button class="foldh" data-fa="clipfold" aria-expanded="${open}" ${tip(open ? 'この欄をたたんで、トラックを広く見ます' : '位置・長さ・フェードの欄を開きます')}><span class="chev ${open ? 'open' : ''}"></span>${esc(tk.name)}</button>
+      <span class="muted">${esc(tr.name)}・録音の長さ ${fmtPos(tk.dur || 0)}${tk.info ? ` ・ ${esc(tk.info)}` : ''}</span><span class="spacer"></span>
+      <button class="ghost cp-x" data-fa="clipclose" aria-label="閉じる" ${tip('選ぶのをやめて、この欄を閉じます')}>×</button></div>`;
+  if (!open) return `<div class="clip-panel dock folded">${head}</div>`;
+  const buf = fx.bufs.get(tk.id);
+  const gainRow = `<div class="row"><span class="muted" ${tip('録った音が小さいとき、いちばん大きい所が音割れしない所まで自動で上げます。元の録音は変えないので、いつでも戻せます')}>音量をそろえる</span>
+      ${tk.gain ? `<b>${dbStr(tk.gain)}</b><button data-fa="norm" data-v="off">元の音量に戻す</button>` : `<span class="muted">元の音量</span>${buf ? '<button data-fa="norm" data-v="on">音量をそろえる</button>' : ''}`}</div>`;
   return `<div class="clip-panel dock">
-    <div class="row"><b>${esc(tk.name)}</b><span class="muted">(${esc(tr.name)}・録音の長さ ${fmtPos(tk.dur || 0)})</span></div>
+    ${head}
+    ${gainRow}
     <div class="row nudge"><span class="muted">位置の微調整</span>
       <button data-fa="nudge" data-d="-0.1">−0.1秒</button><button data-fa="nudge" data-d="-0.01">−0.01秒</button>
       <button data-fa="nudge" data-d="0.01">＋0.01秒</button><button data-fa="nudge" data-d="0.1">＋0.1秒</button>
@@ -3154,7 +3252,7 @@ function drawClips() {
     for (let x = 0; x < w; x++) {
       const a = Math.floor((tk.trimStart + x / pps) * 200), b = Math.max(a + 1, Math.floor((tk.trimStart + (x + 1) / pps) * 200));
       let m = 0; for (let i = a; i < b && i < pk.length; i++) if (pk[i] > m) m = pk[i];
-      const y = Math.max(0.5, Math.min(1, m * 1.4) * mid);
+      const y = Math.max(0.5, Math.min(1, m * (tk.gain || 1) * 1.4) * mid); // そろえた音量で描く
       g.fillRect(x, mid - y, 1, y * 2);
     }
   });
@@ -3217,7 +3315,8 @@ function scheduleTracks(ctx, dest, from, when, skipTrack) {
       const lv2 = (T) => Math.max(0, Math.min(1, xl ? (T - a2) / XFADE : 1, xr ? (b2 - T) / XFADE : 1));
       const g2 = ctx.createGain(); automate(g2.gain, lv2, [a2 + XFADE, b2 - XFADE, b2], T0, b2, toCtx);
       g1.connect(g2); g2.connect(tg);
-      const src = ctx.createBufferSource(); src.buffer = buf; src.connect(g1);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      if (k.gain && k.gain !== 1) { const gk = ctx.createGain(); gk.gain.value = k.gain; src.connect(gk); gk.connect(g1); } else src.connect(g1);
       src.start(toCtx(T0), k.trimStart + (T0 - k.offset), b2 - T0);
       srcs.push(src);
     }
@@ -3257,7 +3356,8 @@ async function audition(tkId) {
   const k = ensureFull(cur).tracks.flatMap((t) => t.takes).find((x) => x.id === tkId), buf = fx.bufs.get(tkId);
   if (!k || !buf) return;
   const c = fullCtx(), src = c.createBufferSource();
-  src.buffer = buf; src.connect(fx.mix);
+  src.buffer = buf;
+  const ag = c.createGain(); ag.gain.value = k.gain || 1; src.connect(ag); ag.connect(fx.mix);
   src.start(c.currentTime + 0.03, k.trimStart, Math.max(0.01, Math.min(k.length, buf.duration - k.trimStart)));
   fx.aud = { tk: tkId, src };
   src.onended = () => { if (fx.aud && fx.aud.src === src) { fx.aud = null; if (fullView) renderFull(); } };
@@ -3279,14 +3379,14 @@ function stopPlayback() {
   fx.sources = [];
   if (metro.byRec) stopMetro();
   cancelAnimationFrame(fx.raf);
-  if (fx.playing && metro.ctx) fx.pos = Math.max(0, fx.startPos + (metro.ctx.currentTime - fx.startCtx));
+  if (fx.playing && metro.ctx) fx.pos = Math.max(0, fx.startPos + (metro.ctx.currentTime - outLatency(metro.ctx) - fx.startCtx));
   fx.playing = false;
 }
 function animate() {
   cancelAnimationFrame(fx.raf);
   const step = () => {
     if (!fx.playing || !fullView) return;
-    const t = Math.max(fx.startPos, fx.startPos + (metro.ctx.currentTime - fx.startCtx));
+    const t = Math.max(fx.startPos, fx.startPos + (metro.ctx.currentTime - outLatency(metro.ctx) - fx.startCtx)); // 聞こえている所
     const ph = $('ph'), p = $('fxPos'), tl = $('tl'), ph2 = $('ph2');
     if (ph) ph.style.left = t * fx.pps + 'px';
     if (ph2) ph2.style.left = t * fx.pps + 'px';
@@ -3319,7 +3419,7 @@ async function fullRecord() {
   if (!tr) { tr = newTrack(F.tracks.length + 1); F.tracks.push(tr); fx.recTrack = tr.id; touch(); }
   fx.recState = 'wait'; renderFull();
   try {
-    fx.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    fx.stream = await openMic(); refreshMics();
   } catch (e) {
     fx.recState = 'idle'; renderFull();
     const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
@@ -3330,7 +3430,7 @@ async function fullRecord() {
   if (fx.recState !== 'wait') { fullRelease(); return; } // 準備中に「やめる」
   await loadFullBuffers();
   const c = fullCtx(), mime = pickMime();
-  try { fx.mr = mime ? new MediaRecorder(fx.stream, { mimeType: mime }) : new MediaRecorder(fx.stream); } catch (e) { fx.mr = new MediaRecorder(fx.stream); }
+  fx.mr = makeRecorder(fx.stream, mime); fx.info = recInfo(fx.stream, fx.mr);
   fx.chunks = []; fx.recStartCtx = 0;
   const trackId = tr.id;
   // 録音機が動き出した時刻を記録し、伴奏を鳴らし始めた時刻との差だけ、あとで頭を切り詰める
@@ -3365,7 +3465,9 @@ async function finishFullTake(trackId, mime) {
   const tr = ensureFull(cur).tracks.find((t) => t.id === trackId);
   if (!tr) { renderFull(); return; }
   const no = tr.takes.reduce((m, k) => Math.max(m, k.no || 0), 0) + 1;
-  const take = { id: uid(), name: `${tr.name} テイク${no}`, no, offset: fx.startPos, trimStart, length: dur - trimStart, fadeIn: 0, fadeOut: 0, dur };
+  const take = { id: uid(), name: `${tr.name} テイク${no}`, no, offset: fx.startPos, trimStart, length: dur - trimStart, fadeIn: 0, fadeOut: 0, dur, info: fx.info || '' };
+  const ng = autoNorm() ? normGain(buf) : 1;
+  if (ng > 1.01) take.gain = Math.round(ng * 1000) / 1000;
   if (storageOk) {
     try { await recPut({ id: take.id, songId: cur.id, secId: FULL_SEC, trackId, name: take.name, blob, mime, dur, createdAt: Date.now() }); }
     catch (e) { console.error(e); showToast('⚠ 録音を保存できませんでした'); }
@@ -3374,7 +3476,7 @@ async function finishFullTake(trackId, mime) {
   tr.takes.push(take); tr.active = take.id;
   fx.sel = { tr: tr.id, tk: take.id }; fx.pos = fx.startPos;
   touch(); renderFull();
-  showToast(`${take.name} を保存しました(このテイクを使う設定にしました)`);
+  showToast(`${take.name} を保存しました${take.gain ? `(音量を ${dbStr(take.gain)} そろえました)` : ''}`);
 }
 function wavBlob(buf) {
   const ch = buf.numberOfChannels, len = buf.length, sr = buf.sampleRate, data = new DataView(new ArrayBuffer(44 + len * ch * 2));
@@ -3470,6 +3572,16 @@ document.addEventListener('click', async (ev) => {
     }
     case 'addtrack': F.tracks.push(newTrack(F.tracks.length + 1)); fx.recTrack = F.tracks[F.tracks.length - 1].id; touch(); renderFull(); break;
     case 'rtarget': fx.recTrack = b.dataset.tr; renderFull(); break;
+    case 'norm': {
+      const { tk } = fx.sel ? findTake(fx.sel.tr, fx.sel.tk) : {};
+      if (!tk) break;
+      if (b.dataset.v === 'off') delete tk.gain;
+      else { const buf = fx.bufs.get(tk.id); const g = buf ? normGain(buf) : 1; if (g > 1.01) tk.gain = Math.round(g * 1000) / 1000; else showToast('すでに十分な音量です'); }
+      touch(); renderFull(); break;
+    }
+    case 'autonorm': prefs.autoNorm = !autoNorm(); savePrefs(); renderFull(); break;
+    case 'clipfold': prefs.clipFold = !prefs.clipFold; savePrefs(); hideTip(); renderFull(); break;
+    case 'clipclose': fx.sel = null; hideTip(); renderFull(); break;
     case 'ticon': { const t = F.tracks.find((x) => x.id === b.dataset.tr); if (t) pickInstrument(t); break; }
     case 'tfold': { const u = trUi(b.dataset.tr); u.fold = !u.fold; savePrefs(); hideTip(); renderFull(); break; }
     case 'tpin': { const u = trUi(b.dataset.tr); u.pin = !u.pin; savePrefs(); hideTip(); renderFull(); if (u.pin) showToast('上の操作部分にピン留めしました。スクロールしても見えます'); break; }
@@ -3555,6 +3667,8 @@ document.addEventListener('input', (ev) => {
   if (el.dataset.ff === 'tname') { const t = F.tracks.find((x) => x.id === el.dataset.tr); t.name = el.value; touch('tn' + t.id); }
   else if (el.dataset.ff === 'vol') { const t = F.tracks.find((x) => x.id === el.dataset.tr); t.vol = Number(el.value); touch('tv' + t.id); }
   else if (el.dataset.ff === 'lat') { prefs.latencyMs = num(el.value, -500, 1000, 0); savePrefs(); }
+  else if (el.dataset.ff === 'mic') { if (el.value) prefs.micId = el.value; else delete prefs.micId; savePrefs(); }
+  else if (el.dataset.ff === 'outlat') { if (el.value === '') delete prefs.outLatMs; else prefs.outLatMs = num(el.value, 0, 1000, 0); savePrefs(); }
   else if (el.dataset.ff === 'tcolor') { const t = F.tracks.find((x) => x.id === el.dataset.tr); if (el.value) t.color = el.value; else delete t.color; touch(); renderFull(); }
   else if (el.dataset.ff === 'zoom') setZoom(5 * Math.pow(80, Number(el.value) / 100));
   else if (el.dataset.ff === 'compload') {
@@ -4053,6 +4167,10 @@ window.addEventListener('hashchange', route);
 window.addEventListener('pagehide', () => { flushSave(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 
+if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+  refreshMics();
+  navigator.mediaDevices.addEventListener && navigator.mediaDevices.addEventListener('devicechange', () => { refreshMics().then(() => { if (fullView) renderFull(); }); }); // イヤホンを抜き差ししたとき
+}
 (async function start() {
   try {
     db = await openDB();
