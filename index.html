@@ -273,6 +273,12 @@ body:not(.viewing) .cv .nm { cursor: pointer; }
 .c5note { font-size: 13px; } .c5h { font-size: 14px; margin: 10px 0 4px; }
 .modal .prog { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; margin: 6px 0; }
 .modal .prog button { padding: 2px 9px; flex: none; }
+.bug-pre { font-size: 11px; color: var(--sub); white-space: pre-wrap; word-break: break-all; background: var(--bg); border-radius: 8px; padding: 8px; margin: 8px 0 0; max-height: 120px; overflow-y: auto; }
+.bug-btn { white-space: nowrap; } .bug-btn .bug-l { margin-left: 3px; font-size: 12px; }
+@media (max-width: 420px) { .bug-btn .bug-l { display: none; } }
+.sw-row { display: flex; flex-wrap: wrap; gap: 6px; } .sw-row .sw { font-size: 12px; padding: 5px 10px; } .sw-row .sw.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tm-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; } .tm-list button { text-align: left; display: flex; align-items: center; gap: 6px; } .tm-list svg { width: 18px; height: 18px; }
+.tm-list label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
 .help-pick { display: grid; gap: 10px; margin: 8px 0; }
 .help-pick button { text-align: left; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
 .help-pick b { font-size: 16px; } .help-pick span { font-size: 12px; color: var(--sub); }
@@ -515,8 +521,24 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--sub); marg
 .tl.pin { margin-top: 6px; max-height: 45vh; overflow-y: auto; }
 .tl.pin .pin-lbl { position: sticky; left: 0; display: inline-block; font-size: 11px; color: var(--sub); padding: 2px 8px; }
 .trk.quiet .clip { opacity: .35; }
-.trh { position: sticky; left: 0; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; padding: 6px 8px; width: min(100%, calc(100vw - 34px)); background: var(--panel); z-index: 2; }
-.trh input[data-ff="tname"] { width: 150px; font-weight: 700; padding: 3px 8px; }
+.trh { position: sticky; left: 0; display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; padding: 5px 8px; width: min(100%, calc(100vw - 34px)); background: var(--panel); z-index: 2; box-sizing: border-box; }
+.trh input[data-ff="tname"] { flex: 1 1 auto; min-width: 56px; }
+.trh .vol-s { width: 90px; flex: 0 1 90px; min-width: 50px; }
+.trh .ico-s { display: inline-flex; color: var(--sub); } .trh .ico-s svg { width: 18px; height: 18px; }
+.trk.tc .trh .ico-s { color: color-mix(in srgb, var(--tc) 70%, var(--ink)); }
+.trh .pin-s { font-size: 12px; }
+.trh .rt-s { padding: 2px 7px; font-size: 15px; }
+.trh .tmenu { font-size: 16px; padding: 1px 8px; }
+.lane.fold.rec { height: 18px; }
+.lane .lane-msg { position: sticky; left: 8px; font-size: 11px; color: var(--sub); line-height: 18px; padding-left: 8px; }
+.mode-sw { margin: 2px 0 8px; } .mode-sw button { padding: 6px 16px; font-size: 15px; font-weight: 700; }
+.fx-head.m-rec .only-edit, .fx-head.m-edit .only-rec { display: none; }
+@media (max-width: 640px) {
+  .clip-panel.dock { max-height: min(34vh, max(120px, calc(100dvh - var(--topH, 52px) - var(--headH, 200px) - 160px))); }
+  .clip-panel .nudge button { padding: 3px 7px; font-size: 12px; }
+  .clip-panel .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.trh input[data-ff="tname"] { width: 150px; font-weight: 700; padding: 3px 8px; box-sizing: border-box; }
 .trh button { font-size: 13px; padding: 3px 8px; }
 .trh button.rt { color: var(--rec); border-color: var(--rec); background: transparent; }
 .trh .vol { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--sub); }
@@ -652,6 +674,7 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--sub); marg
 
 /* ---------- 定数 ---------- */
 const APP_NAME = 'Song Seed';
+const APP_VERSION = '2026-11-20'; // 不具合の報告に添える版(更新したら日付を変える)
 const SECTION_TYPES = ['前奏', 'Aメロ', 'Bメロ', 'サビ', 'Cメロ', '間奏', '落ちサビ', '後奏', 'その他'];
 const BAR_DEFAULT_TYPES = ['前奏', '間奏', '後奏'];
 const MAJOR_KEYS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -1271,6 +1294,7 @@ function renderList() {
   }
   $('app').innerHTML = `
     <div class="topbar"><div class="topbar-in"><h1>🌱 ${APP_NAME}</h1>
+      <button class="ghost bug-btn" data-act="bug" aria-label="不具合を報告" ${tip('おかしな動きを見つけたら、ここから報告文を作って送れます')}>🐞<span class="bug-l">不具合</span></button>
       <button class="ghost" data-act="help" ${tip('使い方の説明をもう一度見ます')}>？ 使い方</button>
     </div></div>
     <div class="wrap">
@@ -1707,6 +1731,7 @@ function renderEditor() {
       <span class="spacer"></span>
       <span class="status" id="saveStatus">${dirty ? '保存待ち…' : '保存済み'}</span>
       ${finePointer() ? `<button class="ghost ${prefs.tips ? 'on' : ''}" data-act="pref" data-k="tips" aria-label="ボタンの説明" ${tip('ボタンにカーソルを当てたときの説明を出すかどうか')}>💬${prefs.tips ? '' : '<s>説明</s>'}</button>` : ''}
+      <button class="ghost bug-btn" data-act="bug" aria-label="不具合を報告" ${tip('おかしな動きを見つけたら、ここから報告文を作って送れます')}>🐞<span class="bug-l">不具合</span></button>
       <button class="ghost" data-act="help" aria-label="使い方" ${tip('使い方の説明・質問')}>？</button>
       <button data-act="toggle-view" class="${viewing ? 'on' : ''}" ${tip('編集用のボタンを隠して、譜面だけを見ます')}>${viewing ? '✎ 編集' : '👁 閲覧'}</button>
     </div></div>
@@ -1927,6 +1952,7 @@ document.addEventListener('click', async (ev) => {
     case 'open-song': go('#song=' + encodeURIComponent(el.dataset.id)); break;
     case 'back': stopChordSeq(); go(''); break;
     case 'help': openHelp(); break;
+    case 'bug': openBugReport(); break;
     case 'undo': undo(); break;
     case 'redo': redo(); break;
     case 'toggle-view': viewing = !viewing; renderEditor(); break;
@@ -3076,8 +3102,10 @@ function setTopH() {
 window.addEventListener('resize', () => { if (fullView) setTopH(); });
 const LANE_H = { S: 24, M: 36, L: 72 };
 const laneSize = () => (LANE_H[prefs.laneH] ? prefs.laneH : 'M');
+// 通し録音の画面は「録音」と「編集」を切り替える(スマホで1画面に詰め込むと操作しづらかったため)
+const fullMode = () => (prefs.fullMode === 'edit' ? 'edit' : 'rec');
 function renderFull() {
-  const s = cur, F = ensureFull(s);
+  const s = cur, F = ensureFull(s), mode = fullMode(), editing = mode === 'edit';
   const oldTl = $('tl'), keepX = oldTl ? oldTl.scrollLeft : 0, keepY = oldTl ? oldTl.scrollTop : 0; // 描き直しても表示位置を保つ
   document.body.classList.remove('viewing');
   const supported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
@@ -3110,24 +3138,21 @@ function renderFull() {
     }).join('');
     const audible = !(t.mute || (solo && !t.solo)), ui = trUi(t.id), tc = TRACK_COLORS[t.color];
     const foldLane = `<div class="lane fold" data-fa="tfold" data-tr="${t.id}" ${tip('たたんだトラック。実際に鳴る所だけを表示しています。押すと開きます')}>${pieces.map((p) => `<span class="fp" style="left:${p.a * pps}px;width:${Math.max(2, (p.b - p.a) * pps)}px"></span>`).join('')}</div>`;
+    // 録音の画面:トラックは見出し1行+鳴る所だけの細い帯。帯を押すと編集の画面でそのテイクを開く
+    const recLane = `<div class="lane fold rec" data-fa="toedit" data-tr="${t.id}" data-tk="${t.active || ''}" ${tip('押すと「編集」に切り替えて、このトラックのテイクを調整します')}>${pieces.map((p) => `<span class="fp" style="left:${p.a * pps}px;width:${Math.max(2, (p.b - p.a) * pps)}px"></span>`).join('')}${t.takes.length ? '' : '<span class="lane-msg">まだテイクがありません</span>'}</div>`;
     const html = `<div class="trk ${audible ? '' : 'quiet'} ${tc ? 'tc' : ''}" ${tc ? `style="--tc:${tc[1]}"` : ''}>
       <div class="trh">
-        <button class="tf" data-fa="tfold" data-tr="${t.id}" aria-label="${ui.fold ? '開く' : 'たたむ'}" ${tip(ui.fold ? 'テイクの段を開きます' : 'テイクの段をたたんで、1行にします')}><span class="chev ${ui.fold ? '' : 'open'}"></span></button>
-        <button class="ico" data-fa="ticon" data-tr="${t.id}" aria-label="楽器の記号" ${tip(t.icon ? `${INSTRUMENTS[t.icon][0]}(押すと変えられます)` : 'このトラックの楽器の記号を選びます')}>${t.icon ? icoSvg(t.icon) : '<span style="font-size:11px;color:var(--sub)">記号</span>'}</button>
-        <button class="pin ${ui.pin ? 'on' : ''}" data-fa="tpin" data-tr="${t.id}" aria-label="ピン留め" ${tip(ui.pin ? 'ピン留めを外します' : '上の操作部分に固定して、スクロールしても見えるようにします')}>📌</button>
-        <button data-fa="rtarget" data-tr="${t.id}" class="${recTr === t.id ? 'on rt' : ''}" ${tip('「● 録音」したとき、このトラックに新しいテイクとして入ります')}>${recTr === t.id ? '◉ 録音先' : '○ 録音先'}</button>
+        ${editing ? `<button class="tf" data-fa="tfold" data-tr="${t.id}" aria-label="${ui.fold ? '開く' : 'たたむ'}" ${tip(ui.fold ? 'テイクの段を開きます' : 'テイクの段をたたんで、1行にします')}><span class="chev ${ui.fold ? '' : 'open'}"></span></button>` : ''}
+        ${t.icon ? `<span class="ico-s" aria-label="${esc(INSTRUMENTS[t.icon][0])}">${icoSvg(t.icon)}</span>` : ''}
+        ${editing ? '' : `<button class="rt-s ${recTr === t.id ? 'on rt' : ''}" data-fa="rtarget" data-tr="${t.id}" aria-label="録音先" ${tip('「● 録音」したとき、このトラックに新しいテイクとして入ります')}>${recTr === t.id ? '◉' : '○'}</button>`}
         <input data-ff="tname" data-tr="${t.id}" value="${esc(t.name)}" aria-label="トラック名">
+        ${ui.pin ? '<span class="pin-s" aria-label="ピン留め中">📌</span>' : ''}
         <button data-fa="mute" data-tr="${t.id}" class="${t.mute ? 'on' : ''}" ${tip('ミュート:このトラックを一時的に鳴らさない')}>M</button>
         <button data-fa="solo" data-tr="${t.id}" class="${t.solo ? 'on' : ''}" ${tip('ソロ:ソロにしたトラックだけを鳴らす(複数可)。ミュート中のトラックもソロの間は鳴り、ソロを外すとミュートに戻ります')}>S</button>
-        <select class="tcol" data-ff="tcolor" data-tr="${t.id}" aria-label="トラックの色" ${tip('トラックの色(パステル)')}><option value="">色なし</option>${Object.entries(TRACK_COLORS).map(([k, v]) => `<option value="${k}" ${t.color === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select>
-        <label class="vol" ${tip('このトラックの音量')}>音量<input type="range" data-ff="vol" data-tr="${t.id}" min="0" max="1.5" step="0.05" value="${t.vol}"></label>
-        ${t.takes.length > 1 ? `<button data-fa="compsave" data-tr="${t.id}" ${tip('今のつなぎ方(基本のテイク+なぞった範囲)に名前をつけて保存します。あとで呼び出して聞き比べられます')}>つなぎを保存</button>` : ''}
-        ${(t.saved || []).length ? `<select data-ff="compload" data-tr="${t.id}" ${tip('保存したつなぎ方を呼び出します(↶ で戻せます)')}><option value="">保存したつなぎ(${t.saved.length})…</option>${t.saved.map((v) => `<option value="${v.id}">${esc(v.name)}</option>`).join('')}</select>
-          <button data-fa="compmenu" data-tr="${t.id}" ${tip('保存したつなぎ方を削除します')}>…</button>` : ''}
-        ${(t.comp || []).length ? `<button data-fa="clearcomp" data-tr="${t.id}" ${tip('なぞって選んだ範囲を全部消し、基本のテイクだけに戻します(↶ で戻せます)')}>範囲をリセット</button>` : ''}
-        <button class="danger" data-fa="deltrack" data-tr="${t.id}" ${tip('このトラックと、そのテイクの録音をすべて削除します')}>削除</button>
+        <input class="vol-s" type="range" data-ff="vol" data-tr="${t.id}" min="0" max="1.5" step="0.05" value="${t.vol}" aria-label="音量" ${tip('このトラックの音量(再生中も変えられます)')}>
+        <button class="tmenu" data-fa="tmenu" data-tr="${t.id}" aria-label="トラックのメニュー" ${tip('色・記号・ピン留め・つなぎの保存・削除など')}>⋯</button>
       </div>
-      ${ui.fold ? foldLane : lanes || '<div class="lane empty"><div class="lane-h"><span class="muted">まだテイクがありません。「● 録音」で録れます</span></div></div>'}
+      ${editing ? (ui.fold ? foldLane : lanes || '<div class="lane empty"><div class="lane-h"><span class="muted">まだテイクがありません。「録音」に切り替えて「● 録音」で録れます</span></div></div>') : recLane}
     </div>`;
     (ui.pin ? pinned : others).push(html);
   });
@@ -3140,30 +3165,35 @@ function renderFull() {
       <button id="btnRedo" data-act="redo" ${hist.redo.length ? '' : 'disabled'} aria-label="やり直し" ${tip('取り消した操作をやり直します')}>↷</button>
       <span class="spacer"></span>
       <span class="status" id="saveStatus">${dirty ? '保存待ち…' : '保存済み'}</span>
+      <button class="ghost bug-btn" data-act="bug" aria-label="不具合を報告" ${tip('おかしな動きを見つけたら、ここから報告文を作って送れます')}>🐞<span class="bug-l">不具合</span></button>
       <button class="ghost" data-act="help" aria-label="使い方">？</button>
     </div></div>
     <div class="wrap full">
       <div class="song-head"><div class="band">${esc(s.title || '(無題の曲)')} ・ ♩=${s.tempo} ・ ${esc(s.timeSig)}</div>
         <div class="title" style="font-size:20px">🎚 通し録音(記録用)</div></div>
       ${supported ? '' : '<p class="err">この画面では録音できません(再生・編集はできます)。録音は https のページ(GitHub Pages に置いた版)で使えます。</p>'}
-      <div class="fx-head ${isFolded() ? 'folded' : ''}" id="fxHead">
+      <div class="fx-head ${isFolded() ? 'folded' : ''} m-${mode}" id="fxHead">
+      <div class="mode-sw seg" role="tablist">
+        <button data-fa="mode" data-v="rec" class="${editing ? '' : 'on'}" ${busy ? 'disabled' : ''} role="tab" aria-selected="${!editing}" ${tip('録音する画面:録音・カウントイン・マイク・クリック')}><span class="rdot">●</span> 録音</button>
+        <button data-fa="mode" data-v="edit" class="${editing ? 'on' : ''}" ${busy ? 'disabled' : ''} role="tab" aria-selected="${editing}" ${tip('編集する画面:テイクの選び方・位置・長さ・フェード・つなぎ')}>✎ 編集</button>
+      </div>
       <div class="transport">
         <button data-fa="home" ${busy ? 'disabled' : ''} ${tip('先頭へ戻ります')}>⏮</button>
         <button data-fa="play" class="${fx.playing && !busy ? 'on' : ''}" ${busy ? 'disabled' : ''} ${tip('再生/停止(スペースキーでも)。録音先以外も含め、使うテイクを全部重ねて鳴らします')}>${fx.playing && !busy ? '■ 停止' : '▶ 再生'}</button>
-        ${st === 'idle' ? `<button class="rec-go" data-fa="rec" ${supported ? '' : 'disabled'} ${tip('再生位置から録音します。ほかのトラックを聞きながら重ねて録れます(イヤホンで)')}><span class="rdot">●</span> 録音</button>`
+        ${editing ? '' : st === 'idle' ? `<button class="rec-go" data-fa="rec" ${supported ? '' : 'disabled'} ${tip('再生位置から録音します。ほかのトラックを聞きながら重ねて録れます(イヤホンで)')}><span class="rdot">●</span> 録音</button>`
           : `<button class="rec-go stop" data-fa="stop">${st === 'count' ? '■ やめる' : st === 'wait' ? '■ やめる' : '■ 停止して保存'}</button>`}
         <span class="pos" id="fxPos">${fmtPos(fx.pos)}<small>${barBeat(fx.pos)}${partAt(fx.pos) ? ' ・ ' + esc(partAt(fx.pos)) : ''}</small></span>
         <span class="rec-state">${st === 'count' ? 'カウントイン中…' : st === 'rec' ? '● 録音中' : st === 'wait' ? 'マイクの準備中…' : st === 'saving' ? '保存中…' : ''}</span>
       </div>
-      <button class="foldh" data-fa="fold" aria-expanded="${!isFolded()}" ${tip('カウントイン・グリッド・表示の幅などの設定をたたんで、画面を広く使います。再生・録音の行は残ります')}><span class="chev ${isFolded() ? '' : 'open'}"></span>録音・表示の設定</button>
-      <div class="rec-opts">
+      <button class="foldh" data-fa="fold" aria-expanded="${!isFolded()}" ${tip('カウントイン・グリッド・表示の幅などの設定をたたんで、画面を広く使います。再生・録音の行は残ります')}><span class="chev ${isFolded() ? '' : 'open'}"></span>${editing ? '編集・表示の設定' : '録音・表示の設定'}</button>
+      <div class="rec-opts only-rec">
         ${countInHTML('data-fa', busy)}
         ${micSelectHTML('data-ff', busy)}
         <button data-fa="autonorm" class="${autoNorm() ? 'on' : ''}" ${tip('録り終えたテイクの音量を、自動で音割れしない所まで上げます(元の録音はそのまま。テイクごとに戻せます)')}>音量の自動そろえ ${autoNorm() ? 'ON' : 'OFF'}</button>
         <button data-fa="click" class="${prefs.recClick ? 'on' : ''}" ${busy ? 'disabled' : ''} ${tip('再生中・録音中にクリック(メトロノーム)を鳴らします。曲の頭を1小節目1拍目としてそろえます')}>クリック ${prefs.recClick ? 'ON' : 'OFF'}</button>
         <button data-fa="metset" ${tip('クリックの音色・拍の頭の音・強弱・刻み')}>⚙ クリックの設定</button>
       </div>
-      <div class="rec-opts">
+      <div class="rec-opts only-edit">
         <span class="grp"><span class="lbl" ${tip('テイクの帯をどう触るか')}>帯の操作</span><span class="seg"><button data-fa="tool" data-v="edit" class="${fx.tool === 'edit' ? 'on' : ''}" ${tip('帯をドラッグで移動、両端のつまみで切り詰め')}>移動・切り詰め</button><button data-fa="tool" data-v="comp" class="${fx.tool === 'comp' ? 'on' : ''}" ${tip('帯を左右になぞると、その範囲だけそのテイクを使います(テイクのつなぎ)。濃い部分が実際に鳴る所')}>範囲で使う</button></span></span>
         <span class="grp"><span class="lbl" ${tip('ドラッグで動かす・切り詰める・なぞるときに吸い付く間隔。「自由」なら小節に関係なく動かせます。PC は option(Alt)キーを押しながらだと一時的に自由になります')}>グリッド</span>
         <span class="seg">${GRIDS.map(([v, l]) => `<button data-fa="grid" data-v="${v}" class="${gridName() === v ? 'on' : ''}">${l}</button>`).join('')}</span></span>
@@ -3179,7 +3209,7 @@ function renderFull() {
       </div>
       ${pinned.length ? `<div class="tl pin ${fx.tool === 'comp' ? 'comping' : ''}" id="tlPin" style="--clipH:${LANE_H[laneSize()]}px"><div class="tl-in" style="width:${W}px">
         <span class="pin-lbl">📌 ピン留め中</span>${pinned.join('')}${gridSvg(W, pps, bar)}<div class="ph" id="ph2" style="left:${fx.pos * pps}px"></div></div></div>` : ''}
-      ${fx.tool === 'comp' ? '<p class="muted comp-hint">範囲で使う:使いたいテイクの帯を左右になぞると、その範囲だけそのテイクが鳴ります(緑が実際に鳴る所)。緑の範囲をなぞらずに押すと、その範囲だけ消えて基本のテイクに戻ります。</p>' : ''}
+      ${editing && fx.tool === 'comp' ? '<p class="muted comp-hint">範囲で使う:使いたいテイクの帯を左右になぞると、その範囲だけそのテイクが鳴ります(緑が実際に鳴る所)。緑の範囲をなぞらずに押すと、その範囲だけ消えて基本のテイクに戻ります。</p>' : ''}
       </div>
       <div class="tl ${fx.tool === 'comp' ? 'comping' : ''}" id="tl" style="--clipH:${LANE_H[laneSize()]}px"><div class="tl-in" style="width:${W}px">
         <div class="ruler" data-fa="ruler">${ruler}</div>
@@ -3190,7 +3220,7 @@ function renderFull() {
       </div></div>
       <div class="full-tools"><button data-fa="addtrack" ${busy ? 'disabled' : ''}>＋ トラックを追加</button>
         <span class="muted">目盛りの数字は小節。目盛りを押す・なぞると再生位置が移ります(グリッドに吸い付きます)。その下の段にパートを置けます</span></div>
-      ${renderClipPanel()}
+      ${editing ? renderClipPanel() : '<p class="muted">トラックの帯を押すと「編集」に切り替わり、テイクの選び方・位置・長さを調整できます。</p>'}
       <div class="full-set">
         <h3>書き出し・設定</h3>
         <div class="row">
@@ -3319,13 +3349,16 @@ function automate(param, fn, pts, T0, T1, toCtx) {
 }
 // 指定の時刻(when)に、曲の位置 from から全トラックを鳴らす。リアルタイム再生とWAV書き出しの両方で使う
 function scheduleTracks(ctx, dest, from, when, skipTrack) {
-  const F = ensureFull(cur), solo = F.tracks.some((t) => t.solo), srcs = [];
+  const F = ensureFull(cur), srcs = [];
   const toCtx = (T) => when + (T - from);
+  const live = dest === fx.mix; // 画面での再生なら、音量・ミュート・ソロを鳴らしながら変えられるようにトラックの音量の部品を覚えておく
+  if (live) fx.tgains = new Map();
   for (const t of F.tracks) {
-    if (t.id === skipTrack || t.mute || (solo && !t.solo)) continue;
+    if (t.id === skipTrack || (!live && !trackLevel(t))) continue;
     const pieces = resolveTrack(t);
     if (!pieces.length) continue;
-    const tg = ctx.createGain(); tg.gain.value = t.vol; tg.connect(dest);
+    const tg = ctx.createGain(); tg.gain.value = trackLevel(t); tg.connect(dest);
+    if (live) fx.tgains.set(t.id, tg);
     for (const p of pieces) {
       const k = p.k, buf = fx.bufs.get(k.id);
       if (!buf) continue;
@@ -3349,6 +3382,43 @@ function scheduleTracks(ctx, dest, from, when, skipTrack) {
     }
   }
   return srcs;
+}
+// トラックの「⋯」:見出しに並べると1行に収まらないものをここにまとめる
+async function trackMenu(trId) {
+  const F = ensureFull(cur), t = F.tracks.find((x) => x.id === trId);
+  if (!t) return;
+  const ui = trUi(t.id);
+  const html = `<h2>${esc(t.name)}</h2>
+    <h3 class="c5h">色</h3><div class="sw-row"><button data-tm="color:" class="sw ${t.color ? '' : 'on'}">なし</button>${Object.entries(TRACK_COLORS).map(([k, v]) => `<button data-tm="color:${k}" class="sw ${t.color === k ? 'on' : ''}" style="background:${v[1]};color:#222">${v[0]}</button>`).join('')}</div>
+    <div class="tm-list">
+      <button data-tm="ticon">${t.icon ? icoSvg(t.icon) : ''} 楽器の記号を${t.icon ? '変える' : '選ぶ'}</button>
+      <button data-tm="tpin">📌 ${ui.pin ? 'ピン留めを外す' : '上にピン留めする'}</button>
+      ${t.takes.length > 1 ? '<button data-tm="compsave">つなぎ方を保存する</button>' : ''}
+      ${(t.saved || []).length ? `<label class="muted">保存したつなぎ方<select id="tmLoad"><option value="">選ぶ…(${t.saved.length})</option>${t.saved.map((v) => `<option value="${v.id}">${esc(v.name)}</option>`).join('')}</select></label><button data-tm="compmenu">保存したつなぎ方を消す</button>` : ''}
+      ${(t.comp || []).length ? '<button data-tm="clearcomp">範囲をリセット(基本のテイクだけに戻す)</button>' : ''}
+      <button data-tm="deltrack" class="danger">このトラックを削除</button>
+    </div>`;
+  const pr = dialog(html, [{ label: '閉じる', value: '' }]);
+  const res = modalResolve, m = $('modal');
+  m.querySelectorAll('[data-tm]').forEach((b) => b.addEventListener('click', () => { closeModal(); res(b.dataset.tm); }));
+  const ld = $('tmLoad'); if (ld) ld.addEventListener('change', () => { const v = (t.saved || []).find((x) => x.id === ld.value); closeModal(); res(''); if (v) { if (v.active && t.takes.some((k) => k.id === v.active)) t.active = v.active; t.comp = clone(v.comp); touch(); renderFull(); flash(`「${v.name}」のつなぎ方を呼び出しました`); } });
+  const v = await pr;
+  if (!v) return;
+  if (v.startsWith('color:')) { const c = v.slice(6); if (c) t.color = c; else delete t.color; touch(); renderFull(); return; }
+  // 既存の操作をそのまま使う(画面の中に一時的なボタンを置いて押す)
+  const tmp = document.createElement('button'); tmp.hidden = true; tmp.dataset.fa = v; tmp.dataset.tr = t.id;
+  $('app').appendChild(tmp); tmp.click(); tmp.remove();
+}
+// トラックの実際の音量(ミュート・ソロを含む)
+function trackLevel(t) {
+  const solo = ensureFull(cur).tracks.some((x) => x.solo);
+  return t.mute || (solo && !t.solo) ? 0 : t.vol;
+}
+// 再生中に音量・ミュート・ソロを変えたら、鳴っている音にすぐ反映する(以前は次の再生まで変わらなかった)
+function applyLiveGains() {
+  if (!fx.tgains || !metro.ctx) return;
+  const now = metro.ctx.currentTime;
+  for (const t of ensureFull(cur).tracks) { const g = fx.tgains.get(t.id); if (g) g.gain.setTargetAtTime(trackLevel(t), now, 0.02); }
 }
 // 範囲 [a,b) をテイク tk にする。重なる既存の範囲は切り取る
 function addComp(t, a, b, tk) {
@@ -3608,18 +3678,26 @@ document.addEventListener('click', async (ev) => {
     }
     case 'micprobe': if (await probeMics()) { renderFull(); const a = autoMic(); showToast(a ? `「${a.label}」を使います` : 'マイクの一覧を読み込みました'); } break;
     case 'autonorm': prefs.autoNorm = !autoNorm(); savePrefs(); renderFull(); break;
+    case 'mode': prefs.fullMode = b.dataset.v; savePrefs(); hideTip(); if (b.dataset.v === 'rec') fx.sel = null; renderFull(); break;
+    case 'toedit': {
+      prefs.fullMode = 'edit'; savePrefs(); hideTip();
+      const t = F.tracks.find((x) => x.id === b.dataset.tr);
+      if (t && t.takes.length) { trUi(t.id).fold = false; fx.sel = { tr: t.id, tk: b.dataset.tk || t.takes[t.takes.length - 1].id }; }
+      renderFull(); break;
+    }
+    case 'tmenu': trackMenu(b.dataset.tr); break;
     case 'clipfold': prefs.clipFold = !prefs.clipFold; savePrefs(); hideTip(); renderFull(); break;
     case 'clipclose': fx.sel = null; hideTip(); renderFull(); break;
     case 'ticon': { const t = F.tracks.find((x) => x.id === b.dataset.tr); if (t) pickInstrument(t); break; }
     case 'tfold': { const u = trUi(b.dataset.tr); u.fold = !u.fold; savePrefs(); hideTip(); renderFull(); break; }
     case 'tpin': { const u = trUi(b.dataset.tr); u.pin = !u.pin; savePrefs(); hideTip(); renderFull(); if (u.pin) showToast('上の操作部分にピン留めしました。スクロールしても見えます'); break; }
-    case 'mute': { const t = F.tracks.find((x) => x.id === b.dataset.tr); t.mute = !t.mute; t.muteBySolo = false; touch(); renderFull(); break; }
+    case 'mute': { const t = F.tracks.find((x) => x.id === b.dataset.tr); t.mute = !t.mute; t.muteBySolo = false; touch(); applyLiveGains(); renderFull(); break; }
     case 'solo': { // ソロにしたらミュートを一時的に外し、ソロを外したら元のミュートに戻す
       const t = F.tracks.find((x) => x.id === b.dataset.tr);
       t.solo = !t.solo;
       if (t.solo && t.mute) { t.mute = false; t.muteBySolo = true; }
       else if (!t.solo && t.muteBySolo) { t.mute = true; t.muteBySolo = false; }
-      touch(); renderFull();
+      touch(); applyLiveGains(); renderFull();
       break;
     }
     case 'use': { // 基本のテイクを変えるだけ。なぞった範囲は残す
@@ -3693,7 +3771,7 @@ document.addEventListener('input', (ev) => {
   if (!fullView || !cur) return;
   const el = ev.target, F = ensureFull(cur);
   if (el.dataset.ff === 'tname') { const t = F.tracks.find((x) => x.id === el.dataset.tr); t.name = el.value; touch('tn' + t.id); }
-  else if (el.dataset.ff === 'vol') { const t = F.tracks.find((x) => x.id === el.dataset.tr); t.vol = Number(el.value); touch('tv' + t.id); }
+  else if (el.dataset.ff === 'vol') { const t = F.tracks.find((x) => x.id === el.dataset.tr); t.vol = Number(el.value); touch('tv' + t.id); applyLiveGains(); }
   else if (el.dataset.ff === 'lat') { prefs.latencyMs = num(el.value, -500, 1000, 0); savePrefs(); }
   else if (el.dataset.ff === 'mic') { if (el.value) prefs.micId = el.value; else delete prefs.micId; savePrefs(); }
   else if (el.dataset.ff === 'outlat') { if (el.value === '') delete prefs.outLatMs; else prefs.outLatMs = num(el.value, 0, 1000, 0); savePrefs(); }
@@ -4015,6 +4093,34 @@ const TUTORIAL = [
   ['⑧ 通し録音(記録用)', '<p>曲の画面の「<b>🎚 通し録音</b>」で、曲をはじめから通して録ります(各パートの「● 録音」は素材用)。</p><ul><li>「● 録音」で録音先のトラックにテイクが増えます。ほかのトラックを聞きながら重ねて録れます(イヤホンで)</li><li>トラックごとに「● 基本」のテイクを1つ選びます。「範囲で使う」にしてほかのテイクをなぞると、その範囲だけ差し替わります。つなぎ方は「つなぎを保存」で残して聞き比べられます</li><li>帯はドラッグで移動、両端のつまみで切り詰め(音の位置はそのまま)。グリッドは小節〜16分・自由から。帯を押すと数値と0.01秒の微調整も</li><li>「横の幅」「全体を表示」「縦の幅」で見やすく</li><li>M(ミュート)・S(ソロ)・音量、「1本の音声に書き出し(WAV)」、録音の遅れ補正もここ</li></ul>'],
   ['⑨ 困ったときは', '<p><b>↶</b> で1手ずつ取り消し、<b>↷</b> でやり直し。</p><p>ボタンの意味が分からないときは、<b>PCはカーソルを当てる、スマホは長押し</b>で説明が出ます。PCでは「💬 説明」で出す/出さないを切り替えられます。</p><p>データはこの端末の中だけにあります。ときどき一覧の「バックアップ書き出し」を。</p>'],
 ];
+// 不具合の報告:サーバーがないので、報告文を作って共有(LINE・メール・AirDrop など)かコピーで送ってもらう。
+// 画面の情報は、曲名や歌詞を含めない(どの画面か・端末・画面の大きさ・版だけ)
+function bugInfo() {
+  const where = fullView ? `通し録音(${fullMode() === 'edit' ? '編集' : '録音'})` : cur ? (pick ? 'コード入力' : rec.open ? 'パートの録音' : '曲の画面') : '曲の一覧';
+  return [`${APP_NAME} ${APP_VERSION}`, `画面:${where}`, `端末:${navigator.userAgent}`, `画面の大きさ:${innerWidth}×${innerHeight}`, `日時:${fmtDate(Date.now())}`].join('\n');
+}
+async function openBugReport() {
+  let text = '', withInfo = true;
+  const pr = dialog(`<h2>🐞 不具合を報告</h2>
+    <p class="muted">何をしたら、どうなったかを書いてください。「共有して送る」で LINE・メール・AirDrop などから送れます。</p>
+    <textarea id="bugText" rows="5" style="width:100%" placeholder="例:通し録音で「● 録音」を押したら、音が録れていなかった"></textarea>
+    <label style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="bugInfo" checked> 画面と端末の情報を添える(曲名や歌詞は入りません)</label>
+    <pre class="bug-pre" id="bugPre">${esc(bugInfo())}</pre>`,
+  [{ label: 'やめる', value: '' }, { label: 'コピーする', value: 'copy' }, { label: '共有して送る', value: 'share', cls: 'primary' }]);
+  const ta = $('bugText'), cb = $('bugInfo'), info = bugInfo();
+  ta.addEventListener('input', () => { text = ta.value; });
+  cb.addEventListener('change', () => { withInfo = cb.checked; $('bugPre').style.display = withInfo ? '' : 'none'; });
+  setTimeout(() => ta.focus(), 30);
+  const v = await pr;
+  if (!v) return;
+  if (!text.trim()) { showToast('どんなことが起きたかを書いてから送ってください'); return; }
+  const body = `【Song Seed 不具合の報告】\n${text.trim()}${withInfo ? '\n\n--- 画面と端末の情報 ---\n' + info : ''}`;
+  if (v === 'share' && navigator.share) {
+    try { await navigator.share({ title: 'Song Seed 不具合の報告', text: body }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(body); showToast('報告文をコピーしました。LINE やメールに貼り付けて送ってください'); }
+  catch (e) { showMessage(body); }
+}
 // ヘルプ:かんたん操作説明(スライド)と、質問に答えるチャット(用意した答えから選んで返す。通信しない)
 function openHelp() {
   const pr = dialog(`<h2>ヘルプ</h2><div class="help-pick">
