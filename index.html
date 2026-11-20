@@ -197,7 +197,7 @@ body.viewing button.chip::after { content: ''; }
   margin: 12px 0 4px; font-size: 14px;
 }
 .dispbar button { font-size: 14px; padding: 4px 10px; }
-/* たたむボタンは、どこでも「見出しの左の ▾/▸」にそろえる(見出しごと押せる) */
+/* たたむボタンは、どこでも「見出しの左の く(開くと下向き)」にそろえる(見出しごと押せる) */
 .foldh { display: inline-flex; align-items: center; gap: 4px; background: transparent; border: none; padding: 2px 4px 2px 0; font-size: 12px; color: var(--sub); font-weight: 600; cursor: pointer; }
 .chev { display: inline-block; width: 7px; height: 7px; border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg); margin: 0 6px 0 3px; transition: transform .15s; flex: none; }
 .chev.open { transform: rotate(45deg) translate(-2px, -2px); } /* 開いている=下向きの「く」、たたんでいる=右向きの「く」(再生の▶と見分ける) */
@@ -253,7 +253,10 @@ textarea.lyrics { width: 100%; min-height: 120px; line-height: 1.7; resize: vert
 /* コード表示(歌詞・小節マス共通) */
 .cv { display: block; }
 .cv .dgm { display: inline-block; position: relative; line-height: 0; margin: 1px 0 2px; padding-right: 11px; cursor: pointer; border-radius: 4px; }
-.cv .dgm::after { content: '▶'; position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-size: 9px; line-height: 1; color: var(--accent); }
+.cv .dgm::after { content: ''; position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; background: var(--accent); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 9v6h4l5 4V5L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 9v6h4l5 4V5L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z'/%3E%3C/svg%3E") center / contain no-repeat; }
+/* コードの音を鳴らす印はスピーカー。▶ だとコード進行の矢印に見えたため */
+.clip-panel .cp-info { margin: 6px 0 0; font-size: 12px; } /* トラック名・録音の長さは欄のいちばん下(見出しの行に入れるとスマホで×が画面の外へ押し出された) */
+.snd-ico { display: inline-block; width: 1em; height: 1em; vertical-align: -0.12em; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 9v6h4l5 4V5L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 9v6h4l5 4V5L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z'/%3E%3C/svg%3E") center / contain no-repeat; }
 .cv .dgm:hover, .cv .dgm:active { background: var(--accent-soft); }
 body:not(.viewing) .cv .nm { cursor: pointer; }
 .how { font-size: 12px; color: var(--sub); margin: 2px 0 6px; }
@@ -405,7 +408,7 @@ body:not(.viewing) .view-only { display: none !important; }
 .pills button small { display: block; font-size: 10px; font-weight: 600; }
 .pills .pl { display: inline-flex; align-items: stretch; }
 .pills .pl > button:first-child { border-radius: 8px 0 0 8px; }
-.pills .pl .pl-play { border-radius: 0 8px 8px 0; border-left: none; padding: 0 7px; font-size: 11px; color: var(--accent); font-weight: 400; }
+.pills .pl .pl-play { border-radius: 0 8px 8px 0; border-left: 1px dashed var(--line); padding: 0 8px; font-size: 14px; color: var(--accent); font-weight: 400; }
 .pills .mtab { display: block; line-height: 0; margin-top: 2px; }
 .pills .mtab .dgsvg { width: 44px; height: 30px; }
 .pills .dgl { display: block; font-size: 15px; color: var(--accent); }
@@ -1876,7 +1879,7 @@ function renderDispBar(s, ctx) {
     legend.push(ctx.ki ? `ディグリーの基準:${esc(ctx.ki.key)}${s.key ? '' : '(推定)'}` : 'ディグリーはKEYを決めると出ます');
     legend.push(funcLegendHTML(ctx.ki));
   }
-  if (prefs.dgm !== false && !(prefs.bass && prefs.bassOnly)) legend.push(viewing ? '<span class="how"><i>TAB(▶)</i>を押すとコードの音が鳴ります</span>' : '<span class="how"><b>コード名</b>を押すと変更 ・ <i>TAB(▶)</i>を押すと音が鳴ります</span>');
+  if (prefs.dgm !== false && !(prefs.bass && prefs.bassOnly)) legend.push(viewing ? '<span class="how"><i>TAB(<span class="snd-ico"></span>)</i>を押すとコードの音が鳴ります</span>' : '<span class="how"><b>コード名</b>を押すと変更 ・ <i>TAB(<span class="snd-ico"></span>)</i>を押すと音が鳴ります</span>');
   if (prefs.bass) legend.push(`<span style="color:var(--bass)">ベース欄は${prefs.bassTuned && s.tuning ? tuningLabel(s.tuning) + 'に合わせた形' : '実音'}。点線枠は手で変えた音</span>`);
   // 説明の行(ディグリーの色分け・押し方など)は、たたんでも出したままにする
   const legendHTML = legend.length ? `<div class="legend">${legend.map((l) => `<span>${l}</span>`).join('')}</div>` : '';
@@ -1922,7 +1925,7 @@ function renderSection(sec, idx, total, ctx) {
       <textarea class="lyrics" data-sec="${sec.id}" placeholder="歌詞を1行ずつ">${esc(sec.lines.map((l) => l.text).join('\n'))}</textarea>`;
   } else {
     const empty = !sec.lines.some((l) => l.text || l.chords.length);
-    body = `${viewing ? '' : `<p class="hint">${empty ? '歌詞がまだありません。「歌詞を書く」で書くか、行の「＋」にコードだけ置けます。' : 'コードを置きたい文字をタップ。行末の「＋」で行の終わりにも置けます。<b>コード名</b>を押すと変更、<i>TAB(▶)</i>を押すと音が鳴ります。'}</p>`}
+    body = `${viewing ? '' : `<p class="hint">${empty ? '歌詞がまだありません。「歌詞を書く」で書くか、行の「＋」にコードだけ置けます。' : 'コードを置きたい文字をタップ。行末の「＋」で行の終わりにも置けます。<b>コード名</b>を押すと変更、<i>TAB(<span class="snd-ico"></span>)</i>を押すと音が鳴ります。'}</p>`}
       <div class="lyr">${sec.lines.map((ln, li) => renderLine(sec, ln, li, ctx)).join('')}</div>`;
   }
   return `<div class="sec ${sec.mode === 'lyrics' && mode === 'place' && !viewing ? 'placing' : ''}" data-sec="${sec.id}">
@@ -1986,7 +1989,7 @@ function renderBars(sec, ctx) {
       <button data-act="bar-add" data-n="1">＋1小節</button>
       <button data-act="bar-add" data-n="4">＋4小節</button>
       <button data-act="bar-remove" ${sec.bars.length <= 1 ? 'disabled' : ''} ${tip('最後の小節を消します')}>−1小節</button>
-      <span class="muted" style="align-self:center">マスをタップでコード、「÷」で1小節に2〜4個。コード名を押すと変更、TAB(▶)を押すと音</span>
+      <span class="muted" style="align-self:center">マスをタップでコード、「÷」で1小節に2〜4個。コード名を押すと変更、TAB(<span class="snd-ico"></span>)を押すと音</span>
     </div>`;
 }
 function updateSummary() {
@@ -2377,14 +2380,14 @@ function capoSuggestHTML(s) {
   if (best.capo === (s.capo || 0) || now.cost - best.cost < 1) return `<span class="capo-sug ok" ${tip('カポ0〜7を比べて、セーハや高いフレットが少ない位置を探しています')}>👌 いまのカポ(${s.capo ? s.capo : 'なし'})がいちばん楽です</span>`;
   return `<button class="capo-sug" data-act="capo-sug" data-v="${best.capo}" ${tip(`カポ0〜7を比べて、セーハや高いフレットがいちばん少ない位置です。押すとカポを変えます(鳴る音・KEYはそのまま。押さえ方だけ変わります)。いま:${list(now)}`)}>💡 ${best.capo ? `カポ${best.capo}` : 'カポなし'}がいちばん楽<small>${list(best)}${best.hard ? ` ・ セーハなど ${best.hard}か所` : ''}</small></button>`;
 }
-// 候補のボタン:押すと決定。小さいTABつき、右の ▶ で音だけ鳴らせる
+// 候補のボタン:押すと決定。小さいTABつき、右のスピーカーで音だけ鳴らせる
 const pill = (chord, label, degFirst) => {
   const c = viewCtx(cur), shape = c.shift ? transposeChord(chord, c.shift, c.shapeStyle) : chord;
   const fn = c.ki ? funcOf(chord, c.ki) : ''; // トニック/サブドミナント/ドミナントの色分け(曲の画面のディグリーと同じ)
   const star = easyShape(shape) ? '<i class="easy">★</i>' : '';
   const sub = [c.shift ? `実音 ${chord}` : '', degFirst ? '' : label].filter(Boolean).join(' ・ ');
   const head = degFirst ? `<span class="dgl ${fn ? 'f' + fn : ''}">${esc(label)}</span><span class="cn2">${esc(shape)}${star}</span>` : `${esc(shape)}${star}`;
-  return `<span class="pl"><button data-pk="use" data-c="${esc(chord)}" class="${fn ? 'pf' + fn : ''}" ${fn ? `title="${FUNC_NAME[fn]}"` : ''}>${head}${sub ? `<small>${esc(sub)}</small>` : ''}${prefs.dgm !== false ? `<span class="mtab">${diagramSVG(shape, 0)}</span>` : ''}</button><button class="pl-play" data-pk="play" data-c="${esc(chord)}" aria-label="${esc(chord)}を鳴らす">▶</button></span>`;
+  return `<span class="pl"><button data-pk="use" data-c="${esc(chord)}" class="${fn ? 'pf' + fn : ''}" ${fn ? `title="${FUNC_NAME[fn]}"` : ''}>${head}${sub ? `<small>${esc(sub)}</small>` : ''}${prefs.dgm !== false ? `<span class="mtab">${diagramSVG(shape, 0)}</span>` : ''}</button><button class="pl-play" data-pk="play" data-c="${esc(chord)}" aria-label="${esc(chord)}を鳴らす"><span class="snd-ico"></span></button></span>`;
 };
 // ディグリーから選ぶ:KEYの度数を押すと、そのKEYのコードが入る
 function degreeRows(ki, key) {
@@ -2582,7 +2585,7 @@ function renderPkDgm() {
   const c = viewCtx(cur), sound = fromInput(v);
   const pressed = pick.inputShape || !c.shift ? v : transposeChord(sound, c.shift, c.shapeStyle);
   const n = Math.min(3, voicings(pressed).length);
-  $('pkDgm').innerHTML = `<button data-pk="play" data-c="${esc(sound)}" ${tip('このコードの音を鳴らします')}>▶ 鳴らす</button>`
+  $('pkDgm').innerHTML = `<button data-pk="play" data-c="${esc(sound)}" ${tip('このコードの音を鳴らします')}><span class="snd-ico"></span> 鳴らす</button>`
     + Array.from({ length: n }, (_, i) => diagramSVG(pressed, i)).join('')
     + (n ? `<span class="muted">${esc(pressed)} のTAB${n > 1 ? '(左がふつうの形)' : ''}</span>` : '');
 }
@@ -2600,7 +2603,7 @@ function renderFb() {
   const shift = shapeShift(cur);
   $('pkFb').innerHTML = `<p class="muted" style="margin:6px 0 0">押さえる所を押してください(もう一度押すと消えます)。${shift ? `カポ・チューニングをつけた状態の押さえ方として読みます。` : ''}</p>
     <div class="fbx"><table><thead>${head}</thead><tbody>${rows}</tbody></table></div>
-    <div class="fb-res">${any ? `<button data-pk="fbplay">▶ 鳴らす</button><button data-pk="fbclear">クリア</button>` : ''}
+    <div class="fb-res">${any ? `<button data-pk="fbplay"><span class="snd-ico"></span> 鳴らす</button><button data-pk="fbclear">クリア</button>` : ''}
       ${res.length ? `<span class="muted">候補:</span>${res.map((n) => `<button data-pk="fbuse" data-c="${esc(n)}">${esc(n)}</button>`).join('')}` : any ? '<span class="muted">違う音を3つ以上鳴らすと候補が出ます</span>' : ''}</div>`;
 }
 function candidates(text) {
@@ -3268,6 +3271,15 @@ function setTopH() {
   document.documentElement.style.setProperty('--panH', (cp ? cp.offsetHeight : 0) + 'px');
 }
 window.addEventListener('resize', () => { if (fullView) setTopH(); });
+// ページを下へスクロールしたときも、目盛りとパートの段を上の操作部分のすぐ下に残す
+// (トラック欄は自分でもスクロールする箱なので CSS の sticky だけではページのスクロールについて来ない)
+function stickRuler() {
+  const tl = $('tl'), fh = $('fxHead');
+  if (!fullView || !tl || !fh) return;
+  const off = Math.max(0, Math.min(tl.clientHeight - 90, fh.getBoundingClientRect().bottom - tl.getBoundingClientRect().top));
+  tl.querySelectorAll('.ruler, .mrow').forEach((el) => { el.style.transform = off > 0 ? `translateY(${off}px)` : ''; });
+}
+window.addEventListener('scroll', () => { if (fullView) stickRuler(); }, { passive: true });
 const LANE_H = { S: 24, M: 36, L: 72 };
 const laneSize = () => (LANE_H[prefs.laneH] ? prefs.laneH : 'M');
 // 通し録音の画面は「録音」と「編集」を切り替える(スマホで1画面に詰め込むと操作しづらかったため)
@@ -3402,7 +3414,7 @@ function renderFull() {
     </div>`;
   const tl = $('tl'); if (tl) { tl.scrollLeft = keepX; tl.scrollTop = keepY; }
   syncPinScroll();
-  setTopH();
+  setTopH(); stickRuler();
   drawClips();
 }
 // ピン留めした段は上の操作部分の中にあるので、横のスクロールを本体とそろえる
@@ -3436,7 +3448,7 @@ function renderClipPanel() {
   const field = (k, label, help) => `<label ${tip(help)}>${label}<input type="number" data-fx="${k}" step="0.01" min="0" value="${tk[k].toFixed(3)}"></label>`;
   const open = !prefs.clipFold;
   const head = `<div class="row cp-head"><button class="foldh" data-fa="clipfold" aria-expanded="${open}" ${tip(open ? 'この欄をたたんで、トラックを広く見ます' : '位置・長さ・フェードの欄を開きます')}><span class="chev ${open ? 'open' : ''}"></span>${esc(tk.name)}</button>
-      <span class="muted">${esc(tr.name)}・録音の長さ ${fmtPos(tk.dur || 0)}${tk.info ? ` ・ ${esc(tk.info)}` : ''}</span><span class="spacer"></span>
+<span class="spacer"></span>
       <button class="ghost cp-x" data-fa="clipclose" aria-label="閉じる" ${tip('選ぶのをやめて、この欄を閉じます')}>×</button></div>`;
   if (!open) return `<div class="clip-panel dock folded">${head}</div>`;
   const buf = fx.bufs.get(tk.id);
@@ -3462,7 +3474,8 @@ function renderClipPanel() {
       ${(tr.comp || []).length || tr.active !== tk.id ? `<button data-fa="wholetake" ${tip('なぞった範囲を消して、このテイクだけを全体に使います(↶ で戻せます)')}>このテイクだけを全体に使う</button>` : ''}
       <button data-fa="dltake">書き出し(このテイクだけ)</button>
       <button class="danger" data-fa="deltake">このテイクを削除</button>
-    </div></div>`;
+    </div>
+    <p class="muted cp-info">${esc(tr.name)}・録音の長さ ${fmtPos(tk.dur || 0)}${tk.info ? ` ・ ${esc(tk.info)}` : ''}</p></div>`;
 }
 function drawClips() {
   const pps = fx.pps;
@@ -4263,16 +4276,16 @@ window.addEventListener('scroll', hideTip, { passive: true });
 
 /* ---------- チュートリアル ---------- */
 const TUTORIAL = [
-  ['Song Seed へようこそ', '<p>歌詞・コード・曲の構成・録音を、1曲ずつまとめておくアプリです。入力は自動で保存されます。</p><p>ここから10枚で使い方を説明します。あとから「？」でいつでも見直せます。もう出さなくてよいときは「今後は表示しない」を。</p>'],
-  ['① 曲の情報', '<p>曲の画面の上で、曲名・バンド名・KEY・テンポ・拍子・カポ・チューニングを決めます。</p><ul><li><b>KEY が分からなくても大丈夫。</b>コードを2つ以上置くと「コードから推定」が出るので「このKEYにする」を押すだけです</li><li>「♩ クリック」でテンポの音。「⚙ クリックの設定」で音色・拍の頭の音・拍ごとの強弱・細かい刻みを変えられます</li><li>「タップでテンポ」で叩いた速さをテンポにできます</li></ul>'],
+  ['Song Seed へようこそ', '<p>歌詞・コード・曲の構成・録音を、1曲ずつまとめておくアプリです。入力は自動で保存されます。</p><p>一覧の「<b>かえるの歌(見本)</b>」には、コードと通し録音(メロディ・コード伴奏)が入っています。触って試してみてください。</p><p>ここから10枚で使い方を説明します。あとから「？」でいつでも見直せます。もう出さなくてよいときは「今後は表示しない」を。</p>'],
+  ['① 曲の情報', '<p>曲の画面の上で、曲名・バンド名・KEY・テンポ・拍子・カポ・チューニングを決めます。</p><ul><li><b>KEY が分からなくても大丈夫。</b>コードを2つ以上置くと「コードから推定」が出るので「このKEYにする」を押すだけです</li><li>「♩ クリック」でテンポの音。「⚙ クリックの設定」で音色・拍の頭の音・拍ごとの強弱・細かい刻みを変えられます</li><li>「タップでテンポ」で叩いた速さをテンポにできます</li><li>KEY の札では<b>スケール</b>も選べます。それぞれの感じの説明つきで、▶ で音階を聞き比べられます</li></ul>'],
   ['② 曲の構成', '<p>前奏・Aメロ・サビなどの<b>パート</b>を並べて曲を作ります。</p><ul><li>いちばん下の「＋ サビ」などで追加</li><li><b>並べ替え</b>:上の「構成」の一覧で、パートの「≡」をつまんで動かします(PCはどこをつかんでもOK)。一覧のパートを押すとそこへ移動。各パートの▲▼でも動かせます</li><li>「複製」で2番のサビなどに使い回し、「×」の数字で繰り返し回数</li><li>削除しても ↶ で戻せます</li></ul>'],
   ['③ 歌詞とコード', '<p>歌詞のセクションは2段階です。</p><ol><li>「歌詞を書く」で歌詞を入れる</li><li>「コードを置く」に切り替えて、<b>コードを乗せたい文字をタップ</b></li></ol><p>あとで歌詞を直しても、コードは乗っていた文字についていきます。</p>'],
   ['④ 演奏のみのパート', '<p>前奏・間奏・後奏のような歌詞のない部分は「<b>演奏のみ</b>」にして、<b>| C | G | Am | F |</b> のマス目で書きます。</p><ul><li>マスをタップしてコードを選ぶ</li><li>「÷」で1小節にコードを2〜4個入れられます。間違えたら ↶</li></ul>'],
-  ['⑤ コードの選び方', '<p>コードを選ぶ画面には入口が4つあります。</p><ul><li><b>直接打つ</b>:am7 → Am7 のように表記を揃えます</li><li><b>提案</b>:直前のコードとKEYから「次に来やすい」「ドミナント系(V7/IIm など)」「借用」「色づけ」を記号つきで出します</li><li><b>スケールのコード</b>:KEY(とスケール)のダイアトニックコード</li><li><b>この曲で使ったコード</b></li></ul>'],
-  ['⑥ 表示の切り替え', '<p>構成の上のボタンで見え方を変えられます。</p><ul><li><b>押さえ方/実音/両方</b>:カポ・半音下げのときに出ます</li><li><b>ディグリー</b>:度数(V7 など)と、トニック/サブドミナント/ドミナントの色分け</li><li><b>ベース欄 ON/OFF</b>:ベースが弾く音。違う音にしたい所はコードの画面で手直し</li><li><b>移調</b>:曲全体を半音ずつ上げ下げ</li></ul>'],
+  ['⑤ コードの選び方', '<p>コード名を<b>直接打つ</b>(am7 → Am7 のように表記を揃えます)か、下のタブから選びます。</p><ul><li><b>使ったコード</b>・<b>ディグリー</b>(I・IV・V など)・<b>五度圏</b>・<b>提案</b>(次に来やすい・ドミナント系・借用・色づけ)・<b>スケール</b>・<b>指板から</b>(押さえた形から名前を探す)・<b>組み立て・分数コード</b></li><li>候補の左の色:<span class="fT">緑=トニック</span>・<span class="fS">青=サブドミナント</span>・<span class="fD">赤=ドミナント</span>。★は開放弦で押さえやすい形</li><li>候補の右の <span class="snd-ico"></span> で音だけ聞けます。スケールを選んでいると、ディグリー・五度圏・提案もそのスケールのコードになります</li></ul>'],
+  ['⑥ 表示の切り替え', '<p>構成の上の「<b>コードの表示方法</b>」で見え方を変えられます(見出しの左の「く」でたためます)。</p><ul><li><b>カポに合わせる/実音/両方</b>:カポ・半音下げのときに出ます</li><li><b>TAB表示</b>:コードの下に押さえ方。<span class="snd-ico"></span> を押すと音が鳴ります</li><li><b>ディグリー</b>:度数(V7 など)と、トニック/サブドミナント/ドミナントの色分け</li><li><b>ベース欄 ON/OFF</b>:ベースが弾く音。違う音にしたい所はコードの画面で手直し</li><li><b>移調</b>:曲全体を半音ずつ上げ下げ。右の「💡」が、いちばん押さえやすいカポを教えてくれます(押すとそのカポに変わります)</li></ul>'],
   ['⑦ パートごとの録音(素材用)', '<p>各パートの <b>「● 録音」</b> を押すと、そのパートだけの録音画面が開きます。フレーズの試し録りなど素材用です。</p><ul><li>「● 録音開始」→ カウントイン(なし・1・2・4小節から選べます)のあと録音 →「■ 停止して保存」</li><li>録音開始の横の「録音中のクリック ON」で、録りながらクリックを聞けます(イヤホンで)</li><li>テイクは何本でも残せて、その場で聞き比べ・書き出しができます</li><li>録音は https のページで使えます(GitHub Pages に置いた版)</li></ul>'],
-  ['⑧ 通し録音(記録用)', '<p>曲の画面の「<b>🎚 通し録音</b>」で、曲をはじめから通して録ります(各パートの「● 録音」は素材用)。</p><ul><li>「● 録音」で録音先のトラックにテイクが増えます。ほかのトラックを聞きながら重ねて録れます(イヤホンで)</li><li>トラックごとに「● 基本」のテイクを1つ選びます。「範囲で使う」にしてほかのテイクをなぞると、その範囲だけ差し替わります。つなぎ方は「つなぎを保存」で残して聞き比べられます</li><li>帯はドラッグで移動、両端のつまみで切り詰め(音の位置はそのまま)。グリッドは小節〜16分・自由から。帯を押すと数値と0.01秒の微調整も</li><li>「横の幅」「全体を表示」「縦の幅」で見やすく</li><li>M(ミュート)・S(ソロ)・音量、「1本の音声に書き出し(WAV)」、録音の遅れ補正もここ</li></ul>'],
-  ['⑨ 困ったときは', '<p><b>↶</b> で1手ずつ取り消し、<b>↷</b> でやり直し。</p><p>ボタンの意味が分からないときは、<b>PCはカーソルを当てる、スマホは長押し</b>で説明が出ます。PCでは「💬 説明」で出す/出さないを切り替えられます。</p><p>データはこの端末の中だけにあります。ときどき一覧の「バックアップ書き出し」を。</p>'],
+  ['⑧ 通し録音(記録用)', '<p>曲の画面の「<b>🎚 通し録音</b>」で、曲をはじめから通して録ります(各パートの「● 録音」は素材用)。</p><ul><li>上の「<b>● 録音 | ✎ 編集</b>」で画面を切り替えます</li><li><b>録音</b>:トラックの「○」で録音先を選び「● 録音」。ほかのトラックを聞きながら重ねて録れます(イヤホンで)</li><li><b>編集</b>:トラックごとに「● 基本」のテイクを1つ選びます。「範囲で使う」にしてほかのテイクをなぞると、その範囲だけ差し替わります。つなぎ方はトラックの「⋯」→「つなぎ方を保存する」で残して聞き比べられます</li><li>帯は移動・両端のつまみで切り詰め(音の位置はそのまま)。<b>スマホは帯を長押ししてからつかむ</b>(なぞるだけならスクロール)。グリッドは小節〜16分・自由から。帯を押すと数値と0.01秒の微調整も</li><li>トラック名の左の「♪」で楽器の記号、右の「📌」で上にピン留め。「横の幅」「全体」「縦の幅」で見やすく</li><li>M(ミュート)・S(ソロ)・音量、「1本の音声に書き出し(WAV)」、録音の遅れ補正もここ</li></ul>'],
+  ['⑨ 困ったときは', '<p><b>↶</b> で1手ずつ取り消し、<b>↷</b> でやり直し。</p><p>ボタンの意味が分からないときは、<b>PCはカーソルを当てる、スマホは長押し</b>で説明が出ます。PCでは「💬 説明」で出す/出さないを切り替えられます。</p><p>「？」→「💬 質問する」で、よくある質問に答えます。おかしな動きを見つけたら、上の「🐞 不具合」から報告文を送れます。</p><p>データはこの端末の中だけにあります。ときどき一覧の「バックアップ書き出し」を。</p>'],
 ];
 // 不具合の報告:サーバーがないので、報告文を作って共有(LINE・メール・AirDrop など)かコピーで送ってもらう。
 // 画面の情報は、曲名や歌詞を含めない(どの画面か・端末・画面の大きさ・版だけ)
@@ -4314,26 +4327,31 @@ function openHelp() {
 const FAQ = [
   { k: ['コード', '置', '入力', '書', '入れ'], q: 'コードを置くには?', a: '歌詞のあるパートは「コードを置く」にして、コードを乗せたい<b>文字をタップ</b>します。行末の「＋」で行の終わりにも置けます。演奏だけのパートは「演奏のみ」にして、小節のマスをタップします。' },
   { k: ['変え', '変更', '直', '消', '削除', 'コード'], q: 'コードを変える・消すには?', a: '枠のついた<b>コード名のボタン</b>を押すと入力画面が開きます。別のコードを選べば変更、「削除」で消せます。間違えたら上の「↶」で戻せます。' },
-  { k: ['tab', '音', '鳴', '聞', '再生', '押さえ'], q: 'コードの音を聞くには?', a: 'コードの横の<b>TAB(▶)</b>を押すとその音が鳴ります。パートごとの「▶ コード」、構成の行の「▶ 全体のコード」で、テンポに合わせて順に鳴らせます。' },
+  { k: ['tab', '音', '鳴', '聞', '再生', '押さえ'], q: 'コードの音を聞くには?', a: 'コードの横の<b>TAB(スピーカーの印)</b>を押すとその音が鳴ります。パートごとの「▶ コード」、構成の行の「▶ 全体のコード」で、テンポに合わせて順に鳴らせます。' },
   { k: ['長さ', '拍', '小節', '歌詞あり', '1小節'], q: '歌詞ありのコードの長さは?', a: 'コード入力の画面の「長さ」で、1拍〜4小節から選べます。次のコードまでの長さとして「▶ コード」で使います。選ばなければ1小節です。' },
   { k: ['カポ', 'チューニング', '半音', 'レギュラー'], q: 'カポ・チューニングを設定するには?', a: '曲名の下の<b>札(カポなし・レギュラーなど)</b>を押すと設定できます。カポを付けると、コードはカポに合わせた形で表示されます。「コードの表示方法」で実音・両方にも切り替えられます。' },
-  { k: ['表示', '実音', '両方', 'たた', '折'], q: 'コードの表示を切り替えるには?', a: '「コードの表示方法」で、カポに合わせる・実音・両方を選べます。TAB・ディグリー・ベース欄もそこで切り替えます。右端の「▾ たたむ」で1行にたためます。' },
+  { k: ['表示', '実音', '両方', 'たた', '折'], q: 'コードの表示を切り替えるには?', a: '「コードの表示方法」で、カポに合わせる・実音・両方を選べます。TAB・ディグリー・ベース欄もそこで切り替えます。見出し「コードの表示方法」の左の「く」で1行にたためます。' },
   { k: ['key', 'キー', '推定', 'わから'], q: 'KEYがわからないときは?', a: 'コードを2つ以上置くと、曲名の下に<b>推定のKEY</b>が出ます。「このKEYにする」で決められます。KEYの札を押して手で選ぶこともできます。' },
-  { k: ['指板', '名前', 'コード名', 'わから', '押さえた'], q: 'コード名がわからないときは?', a: 'コード入力の画面の「<b>指板から探す</b>」で、押さえているフレットを押すと、コード名の候補が出ます。' },
-  { k: ['ディグリー', '度数', '五度圏', 'tips', '進行', '王道', 'カノン'], q: 'コード進行の基本を知りたい', a: 'コード入力の画面の右上「<b>💡 TIPS</b>」で、五度圏とディグリー、定番の進行(王道・カノンなど)を見られます。演奏のみのパートなら、進行をそのまま小節に入れられます。「ディグリーから選ぶ」でI・IV・Vなどからも選べます。' },
+  { k: ['指板', '名前', 'コード名', 'わから', '押さえた'], q: 'コード名がわからないときは?', a: 'コード入力の画面の「<b>指板から</b>」タブで、押さえているフレットを押すと、コード名の候補が出ます。' },
+  { k: ['ディグリー', '度数', '五度圏', 'tips', '進行', '王道', 'カノン'], q: 'コード進行の基本を知りたい', a: 'コード入力の画面の右上「<b>💡 TIPS</b>」で、五度圏とディグリー、定番の進行(王道・カノンなど)を見られます。演奏のみのパートなら、進行をそのまま小節に入れられます。コード入力の「ディグリー」タブでは I・IV・V などの度数から選べます。' },
   { k: ['録音', '録', 'テイク', 'パート'], q: '録音するには?', a: 'パートごとの「<b>● 録音</b>」は素材用(フレーズの試し録り)、上の「<b>🎚 通し録音</b>」は曲を通して重ね録りする記録用です。どちらもテイクを何本でも残せます。' },
   { k: ['マイク', '許可', '録音できない', '使えない', 'https'], q: 'マイクが使えない・録音できない', a: 'iPhone は 設定 → Safari → マイク を「確認」か「許可」に。Mac はブラウザのアドレスバー横の設定から許可します。アプリの中の画面(プレビューなど)ではマイクを使えないことがあるので、Safari や Chrome で開いてください。' },
-  { k: ['カウント', 'クリック', 'メトロノーム', 'テンポ'], q: 'カウントイン・クリックの設定は?', a: '録音画面の「カウントイン」で、なし・1・2・4小節から選べます。クリックの音色や強弱は「⚙ クリックの設定」で。テンポは曲名の下の「♩=」の札で変えます。' },
-  { k: ['つなぎ', 'コンピング', '範囲', '基本', 'いいとこ'], q: '良いテイクをつなぐには?', a: '通し録音で、トラックごとに「● 基本」のテイクを選び、「範囲で使う」にして使いたいテイクの帯をなぞると、その範囲だけ差し替わります。「つなぎを保存」で聞き比べもできます。' },
+  { k: ['カウント', 'クリック', 'メトロノーム', 'テンポ'], q: 'カウントイン・クリックの設定は?', a: '録音画面の「カウントイン」で、なし・1・2・4小節から選べます。クリックの音色や強弱は「⚙ クリックの設定」で。テンポは曲名の下の「♩ =」の札で変えます。' },
+  { k: ['つなぎ', 'コンピング', '範囲', '基本', 'いいとこ'], q: '良いテイクをつなぐには?', a: '通し録音で、トラックごとに「● 基本」のテイクを選び、「範囲で使う」にして使いたいテイクの帯をなぞると、その範囲だけ差し替わります。トラックの「⋯」→「つなぎ方を保存する」で聞き比べもできます。' },
   { k: ['wav', '書き出', '音声', 'ファイル', '共有'], q: '録音を1本の音声にするには?', a: '通し録音の画面の下の「<b>⤓ 1本の音声に書き出し(WAV)</b>」で、使うテイクを全部重ねた音声ファイルにできます。' },
   { k: ['バックアップ', '移', '送', '別の端末', '端末', 'iphone', 'mac', '機種変'], q: 'iPhone と Mac の間で曲を移すには?', a: '曲の一覧の「<b>バックアップ書き出し</b>」で曲を選んで書き出し、もう一方の端末で「読み込み」します。録音も移すときは「録音も入れる」にチェックします。' },
-  { k: ['フォルダ', '分け', '移動', 'バンド', '弾き語り'], q: '曲をフォルダに分けるには?', a: '曲の一覧の「<b>＋ フォルダ</b>」で作ります。曲の右の「⋯」→「フォルダへ移動」で移せます。フォルダの名前変更・削除は、フォルダを選んで「⋯」から。' },
+  { k: ['フォルダ', '分け', '移動', 'バンド', '弾き語り'], q: '曲をフォルダに分けるには?', a: '曲の一覧の「<b>＋ 新しいフォルダ</b>」で作ります。曲の右の「⋯」→「フォルダへ移動」で移せます。フォルダの名前変更・削除は、フォルダを選んで「⋯」から。' },
   { k: ['曲', '削除', '消', '除去'], q: '曲を削除するには?', a: '曲の一覧で、曲の右の「<b>⋯</b>」→「削除」。曲の画面のいちばん下の「この曲を削除」でも消せます(録音も消え、戻せません)。' },
   { k: ['移調', 'キーを変', '上げ', '下げ'], q: '曲全体を移調するには?', a: '「コードの表示方法」の行の「移調 −1/＋1」で、KEYとすべてのコードを半音ずつ動かせます。' },
   { k: ['ベース', 'ベース欄'], q: 'ベースの音を出すには?', a: '「ベース欄 ON」で、全部のコードの下にベースが弾く音を出します。「ベースだけ」でコード名を隠せます。チューニングを下げているときは、ベースもその形で出すか選べます。' },
   { k: ['閲覧', '見る', 'ライブ', '演奏'], q: '譜面だけを見るには?', a: '右上の「<b>👁 閲覧</b>」で、編集用のボタンを隠して譜面だけにできます。' },
   { k: ['戻', '取り消', 'やり直', '間違'], q: '操作を取り消すには?', a: '上の「<b>↶</b>」で直前の操作を取り消し、「↷」でやり直せます(Mac は ⌘Z / ⇧⌘Z)。' },
   { k: ['保存', 'データ', '消える', 'どこ'], q: 'データはどこに保存される?', a: '曲と録音は<b>この端末のブラウザの中</b>に自動で保存されます。サーバーには送りません。端末を替える・消えると困るときに備えて、ときどき「バックアップ書き出し」をしてください。' },
+  { k: ['スケール', 'ドリアン', 'モード', 'マイナー', 'メジャー'], q: 'スケールを選ぶとどうなる?', a: 'KEY の札の「スケール」で選ぶと、コード入力のディグリー・五度圏・提案・スケールのタブが、そのスケールのコードになります。「スケールそれぞれの感じ」で説明を読み、▶ で音階を聞き比べられます。' },
+  { k: ['カポ', '楽', '押さえやす', 'セーハ', 'おすすめ'], q: 'いちばん押さえやすいカポは?', a: '「コードの表示方法」の「移調」の右に、カポ0〜7を比べた提案が出ます。「💡 カポ◯がいちばん楽」を押すと、そのカポに変わります(鳴る音・KEYはそのまま)。' },
+  { k: ['スクロール', '帯', '長押し', 'スマホ', 'つかむ'], q: 'スマホで帯を動かすには?', a: '通し録音の「編集」で、帯を少し長く(約0.3秒)押すと緑の太枠になってつかめます。なぞるだけならトラック欄のスクロールになります。' },
+  { k: ['不具合', 'バグ', '報告', 'おかしい'], q: '不具合を報告するには?', a: '画面の上の「🐞 不具合」で、何が起きたかを書いて「共有して送る」か「コピーする」。曲名や歌詞は入りません。' },
+  { k: ['見本', 'かえる', 'サンプル', 'デモ'], q: '見本の曲は?', a: '「かえるの歌(見本)」にコードと通し録音(メロディ・コード伴奏)が入っています。消しても大丈夫です(もう一度は入りません)。' },
   { k: ['ホーム', 'アプリ', 'アイコン', '追加'], q: 'アプリのように使うには?', a: 'iPhone の Safari で開き、共有ボタン →「ホーム画面に追加」。Safari とホーム画面のアイコンでは保存場所が別なので、どちらかに決めて使ってください。' },
 ];
 function faqAnswer(text) {
