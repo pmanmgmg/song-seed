@@ -2697,13 +2697,35 @@ function pickMime() {
 // マイクは音声通話向けの加工(エコー除去・雑音除去・自動音量)を切り、1ch・48kHz を希望する(できない端末では無視される)
 const MIC_BASE = { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 1 }, sampleRate: { ideal: 48000 } } };
 // 選んだマイクで開く。選んだマイクが見つからなければ、端末の標準のマイクで開き直す
+// 自動で選ぶマイク:本体のマイクを優先し、Bluetooth のイヤホンのマイク(通話用の方式になり音が悪い)は避ける
+const BT_RE = /airpods|bluetooth|hands-?free|headset|ヘッドセット|beats|buds/i;
+const BUILTIN_RE = /iphone|ipad|内蔵|built-?in|macbook|本体|internal/i;
+function autoMic() {
+  const l = micList.filter((d) => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications' && d.label);
+  return l.find((d) => BUILTIN_RE.test(d.label) && !BT_RE.test(d.label)) || l.find((d) => !BT_RE.test(d.label)) || null;
+}
 async function openMic() {
   const base = { ...MIC_BASE.audio };
-  if (prefs.micId) {
-    try { return await navigator.mediaDevices.getUserMedia({ audio: { ...base, deviceId: { exact: prefs.micId } } }); }
-    catch (e) { if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) throw e; showToast('選んだマイクが見つからないので、標準のマイクで録ります'); }
+  const chosen = prefs.micId || (autoMic() || {}).deviceId;
+  if (chosen) {
+    try { return await navigator.mediaDevices.getUserMedia({ audio: { ...base, deviceId: { exact: chosen } } }); }
+    catch (e) { if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) throw e; if (prefs.micId) showToast('選んだマイクが見つからないので、自動で選び直して録ります'); }
   }
   return navigator.mediaDevices.getUserMedia({ audio: base });
+}
+// マイクを一度だけ開いて閉じ、許可と名前の一覧を得る(録音の画面を開いたとき・「マイクを確認」)
+async function probeMics() {
+  try { const st = await navigator.mediaDevices.getUserMedia({ audio: true }); st.getTracks().forEach((t) => t.stop()); }
+  catch (e) { showMessage('マイクの使用が許可されていません。\niPhone:設定 → Safari → マイク を「確認」か「許可」に。'); return false; }
+  await refreshMics();
+  return true;
+}
+// 録音の画面を開いたとき:すでに許可されていれば、黙って一覧を取り直して自動で選ぶ
+async function detectMics(rerender) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  const before = micList.map((d) => d.label).join();
+  await refreshMics();
+  if (micList.map((d) => d.label).join() !== before) rerender();
 }
 let micList = [];
 async function refreshMics() {
@@ -2714,9 +2736,11 @@ async function refreshMics() {
 function micSelectHTML(attr, disabled) {
   const named = micList.some((d) => d.label);
   const opts = micList.filter((d) => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
-  return `<label class="cin" ${tip('録音に使うマイク。イヤホンのマイクで音がこもるときは、本体のマイクに切り替えます(端末によっては切り替えられません)')}>入力<select ${attr}="mic" ${disabled ? 'disabled' : ''} style="max-width:180px">
-    <option value="">標準(端末まかせ)</option>${opts.map((d, i) => `<option value="${esc(d.deviceId)}" ${prefs.micId === d.deviceId ? 'selected' : ''}>${esc(d.label || 'マイク' + (i + 1))}</option>`).join('')}
-    ${named ? '' : '<option value="" disabled>(一度録音すると名前が出ます)</option>'}</select></label>`;
+  const auto = autoMic();
+  const autoLbl = named ? `自動:${auto ? auto.label : '標準のマイク'}` : '自動(本体のマイクを優先)';
+  return `<label class="cin" ${tip('録音に使うマイク。自動にしておくと本体のマイクを選び、Bluetooth のイヤホンのマイク(音がこもる)は避けます。手で選ぶこともできます')}>入力<select ${attr}="mic" ${disabled ? 'disabled' : ''} style="max-width:200px">
+    <option value="">${esc(autoLbl)}</option>${named ? opts.map((d, i) => `<option value="${esc(d.deviceId)}" ${prefs.micId === d.deviceId ? 'selected' : ''}>${esc(d.label || 'マイク' + (i + 1))}${BT_RE.test(d.label) ? '(音質低め)' : ''}</option>`).join('') : ''}</select></label>
+    ${named ? '' : `<button ${attr === 'data-ff' ? 'data-fa' : 'data-rk'}="micprobe" ${disabled ? 'disabled' : ''} ${tip('マイクの使用を許可して、使えるマイクの一覧を出します')}>🎤 マイクを確認</button>`}`;
 }
 function makeRecorder(stream, mime) {
   const bps = /opus|webm|ogg/.test(mime) ? 192000 : 256000;
@@ -2740,6 +2764,7 @@ async function openRec(sec) {
   await loadTakes();
   renderRec();
   $('recSheet').classList.add('open'); $('sheetBg').classList.add('open');
+  detectMics(() => { if (rec.open) renderRec(); });
 }
 async function loadTakes() {
   rec.urls.forEach((u) => URL.revokeObjectURL(u)); rec.urls = [];
@@ -2878,6 +2903,7 @@ $('recSheet').addEventListener('click', async (ev) => {
   const k = b.dataset.rk;
   if (k === 'start') startRecording();
   else if (k === 'countin') { setCountBars(b.dataset.n); renderRec(); }
+  else if (k === 'micprobe') { if (await probeMics()) { renderRec(); const a = autoMic(); showToast(a ? `「${a.label}」を使います` : 'マイクの一覧を読み込みました'); } }
   else if (k === 'click') toggleRecOpt('recClick');
   else if (k === 'metset') openMet();
   else if (k === 'stop') stopRecording();
@@ -3002,6 +3028,7 @@ async function openFull() {
   fx.sel = null; fx.pos = 0; fx.recTrack = '';
   fx.bufs.clear(); fx.peaks.clear(); fx.missing.clear();
   renderFull();
+  detectMics(() => { if (fullView) renderFull(); });
   await loadFullBuffers();
   if (fullView) renderFull(); // 読み込みが終わったら波形を出す
 }
@@ -3579,6 +3606,7 @@ document.addEventListener('click', async (ev) => {
       else { const buf = fx.bufs.get(tk.id); const g = buf ? normGain(buf) : 1; if (g > 1.01) tk.gain = Math.round(g * 1000) / 1000; else showToast('すでに十分な音量です'); }
       touch(); renderFull(); break;
     }
+    case 'micprobe': if (await probeMics()) { renderFull(); const a = autoMic(); showToast(a ? `「${a.label}」を使います` : 'マイクの一覧を読み込みました'); } break;
     case 'autonorm': prefs.autoNorm = !autoNorm(); savePrefs(); renderFull(); break;
     case 'clipfold': prefs.clipFold = !prefs.clipFold; savePrefs(); hideTip(); renderFull(); break;
     case 'clipclose': fx.sel = null; hideTip(); renderFull(); break;
