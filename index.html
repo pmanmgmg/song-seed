@@ -4379,6 +4379,102 @@ async function importBackup(file) {
   route();
 }
 
+/* ---------- 見本の曲「かえるの歌」 ---------- */
+// メロディはドイツ民謡(自由に使える)。よく知られた日本語の歌詞は著作権が残っているため、歌詞の欄は音名(ドレミ)にしている
+// 初めての端末にも、すでに使っている端末にも1回だけ入れる。消したら二度と入れない
+const LS_SAMPLE = 'songseed.sampleKaeru';
+const KAERU = {
+  tempo: 100,
+  intro: [['C'], ['G7']],
+  // 各行:歌詞(音名)と、[コード, 文字の位置, 拍]
+  lines: [
+    ['ドレミファ ミレド', [['C', 0, 4], ['G7', 6, 2], ['C', 8, 2]]],
+    ['ミファソラ ソファミ', [['C', 0, 4], ['G7', 6, 2], ['C', 9, 2]]],
+    ['ド ド ド ド', [['C', 0, 4], ['C', 4, 4]]],
+    ['ドドレレミミファファ ミレド', [['C', 0, 4], ['G7', 11, 2], ['C', 13, 2]]],
+  ],
+  // メロディ:[MIDI, 拍]。0 は休み。前奏2小節のあとから
+  melody: [[72, 1], [74, 1], [76, 1], [77, 1], [76, 1], [74, 1], [72, 2],
+    [76, 1], [77, 1], [79, 1], [81, 1], [79, 1], [77, 1], [76, 2],
+    [72, 1], [0, 1], [72, 1], [0, 1], [72, 1], [0, 1], [72, 1], [0, 1],
+    [72, .5], [72, .5], [74, .5], [74, .5], [76, .5], [76, .5], [77, .5], [77, .5], [76, 1], [74, 1], [72, 2]],
+};
+async function renderSampleAudio(kind, chords, total) {
+  const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!Off) return null;
+  const sr = 22050, spb = 60 / KAERU.tempo, oc = new Off(1, Math.ceil((total + 1) * sr), sr);
+  const out = oc.createGain(); out.gain.value = 0.5; out.connect(oc.destination);
+  if (kind === 'melody') { // やわらかい笛のような音
+    let t = 2 * 4 * spb;
+    for (const [m, b] of KAERU.melody) {
+      const d = b * spb;
+      if (m) {
+        const f = 440 * Math.pow(2, (m - 69) / 12), o = oc.createOscillator(), o2 = oc.createOscillator(), g = oc.createGain();
+        o.type = 'triangle'; o.frequency.value = f; o2.type = 'sine'; o2.frequency.value = f * 2;
+        const g2 = oc.createGain(); g2.gain.value = 0.15; o2.connect(g2); g2.connect(g);
+        o.connect(g); g.connect(out);
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.7, t + 0.02); g.gain.setTargetAtTime(0.45, t + 0.03, 0.08);
+        g.gain.setTargetAtTime(0, t + d * 0.85, 0.03);
+        o.start(t); o2.start(t); o.stop(t + d + 0.2); o2.stop(t + d + 0.2);
+      }
+      t += d;
+    }
+  } else { // ギターのコード(2拍ごとに刻む)
+    for (const e of chords) {
+      const vs = voicings(e.chord);
+      if (!vs.length) continue;
+      for (let b = 0; b * spb < e.dur - 0.01; b += 2) {
+        const at = e.t + b * spb;
+        let k = 0;
+        vs[0].fr.forEach((fr, i) => {
+          if (fr < 0) return;
+          const src = oc.createBufferSource(), g = oc.createGain();
+          src.buffer = pluckBuf(oc, OPEN_MIDI[i] + fr); g.gain.value = (b ? 0.3 : 0.5) * (0.85 + 0.15 * Math.random());
+          src.connect(g); g.connect(out); src.start(at + k * 0.014); src.stop(at + 2.2); k++;
+        });
+      }
+    }
+  }
+  const buf = await new Promise((res, rej) => { const pr = oc.startRendering(); if (pr && pr.then) pr.then(res, rej); else oc.oncomplete = (ev) => res(ev.renderedBuffer); });
+  return wavBlob(buf);
+}
+async function addSampleSong() {
+  if (!storageOk || lsGet(LS_SAMPLE)) return false;
+  try {
+    const now = Date.now(), spb = 60 / KAERU.tempo, bar = 4 * spb;
+    const intro = newSection('前奏', 'bars');
+    intro.bars = KAERU.intro.map((b) => b.map((c) => ({ chord: c, bass: '' })));
+    const verse = newSection('Aメロ', 'lyrics');
+    verse.label = 'うた';
+    verse.lines = KAERU.lines.map(([text, cs]) => ({ text, chords: cs.map(([chord, pos, beats]) => ({ pos, chord, bass: '', beats })) }));
+    const s = {
+      id: uid(), title: 'かえるの歌(見本)', band: '見本', folder: '', key: 'C', scale: '', tempo: KAERU.tempo, timeSig: '4/4', capo: 0, tuning: 0,
+      sections: [intro, verse],
+      full: { markers: [{ id: uid(), start: 0, len: 2, secId: intro.id, label: '', color: '' }, { id: uid(), start: 2, len: 8, secId: verse.id, label: '', color: '' }], tracks: [] },
+      createdAt: now, updatedAt: now,
+    };
+    // 通し録音:メロディとコード伴奏を、アプリの中で音を作って入れる
+    const chords = [];
+    let t = 0;
+    KAERU.intro.forEach((b) => b.forEach((c) => { chords.push({ chord: c, t, dur: bar / b.length }); t += bar / b.length; }));
+    KAERU.lines.forEach(([, cs]) => cs.forEach(([c, , beats]) => { chords.push({ chord: c, t, dur: beats * spb }); t += beats * spb; }));
+    const total = t;
+    for (const [kind, name, icon, color] of [['melody', 'メロディ', 'keys', 'sky'], ['chords', 'コード伴奏', 'ag', 'peach']]) {
+      const blob = await renderSampleAudio(kind, chords, total);
+      if (!blob) continue;
+      const tkId = uid(), dur = Math.round((total + 1) * 100) / 100;
+      await recPut({ id: tkId, songId: s.id, secId: '__full', name: `${name} テイク1`, mime: 'audio/wav', dur, createdAt: now, blob });
+      s.full.tracks.push({ id: uid(), name, vol: 1, icon, color, mute: false, solo: false, muteBySolo: false, active: tkId,
+        takes: [{ id: tkId, name: `${name} テイク1`, no: 1, offset: 0, trimStart: 0, length: total, fadeIn: 0, fadeOut: 0, dur }], comp: [], saved: [] });
+    }
+    const ns = normalizeSong(s);
+    await dbPut(clone(ns));
+    songs.push(ns);
+    lsSet(LS_SAMPLE, String(Date.now())); // 入れ終わってから印を付ける(途中で閉じたら次に開いたとき入れ直す)
+    return true;
+  } catch (e) { console.error('見本の曲を入れられませんでした', e); lsSet(LS_SAMPLE, 'failed'); return false; } // 失敗した端末で毎回試さない
+}
+
 /* ---------- 起動 ---------- */
 window.addEventListener('hashchange', route);
 window.addEventListener('pagehide', () => { flushSave(); });
@@ -4399,6 +4495,8 @@ if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
   }
   await route();
   if (!lsGet(LS_TUTORIAL)) openTutorial(0);
+  // 見本の曲は、画面を出してから裏で作る(音を作るのに少し時間がかかるため)
+  addSampleSong().then((added) => { if (added && !cur && !fullView) renderList(); });
 })();
 </script>
 </body>
