@@ -204,6 +204,9 @@ body.viewing button.chip::after { content: ''; }
 .foldh:hover { color: var(--ink); }
 .dispbar .foldh { width: 100%; margin-bottom: -2px; }
 .dispbar .brk { flex-basis: 100%; height: 0; }
+.capo-sug { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.25; border-color: var(--accent); color: var(--ink); background: var(--accent-soft); }
+.capo-sug small { font-size: 11px; color: var(--sub); }
+.capo-sug.ok { border: 0; background: none; font-size: 12px; color: var(--sub); padding: 4px 2px; }
 .dispbar .lbl { color: var(--sub); font-size: 12px; }
 .seg { display: inline-flex; }
 .seg button { border-radius: 0; }
@@ -907,6 +910,20 @@ function scaleChords(tonic, ivs, style) {
   });
 }
 
+// 選んだスケール(未設定なら KEY のメジャー/ナチュラルマイナー)。短調寄りかどうかは3番目の音で決める
+const scaleKeyOf = (s, ki) => s.scale || (ki && ki.minor ? 'naturalMinor' : 'major');
+const scaleIsMinor = (k) => SCALES[k][1][2] === 3;
+// KEY の長調/短調とスケールが食い違うときの一言(主音は KEY のまま、音はスケールで決める)
+function scaleMismatch(s) {
+  const ki = keyInfo(effKey(s));
+  if (!s.scale || !ki || scaleIsMinor(s.scale) === ki.minor) return '';
+  return `KEY は ${spell(ki.tonic, keyStyle(effKey(s)))}${ki.minor ? '(短調)' : '(長調)'}ですが、主音 ${spell(ki.tonic, keyStyle(effKey(s)))} の${SCALES[s.scale][0]}(${scaleIsMinor(s.scale) ? '短調寄り' : '長調寄り'})として扱います`;
+}
+// スケールの基本のコード(3和音。減三和音はスケールの音で作れる4和音 m7(b5) か dim7 で出す)
+function scaleBasics(s, ki, key) {
+  return scaleChords(ki.tonic, SCALES[scaleKeyOf(s, ki)][1], keyStyle(key)).map((r) => (r.triad.endsWith('dim') ? r.seventh : r.triad));
+}
+
 /* ---------- 提案 ---------- */
 // 直前のコードから「次に来やすいコード」(長調の度数で持つ。短調は平行長調に読み替える)
 const NEXT = {
@@ -929,6 +946,12 @@ function suggestions(song, prev, show = (c) => c) {
   const groups = [];
   const seen = new Set();
   const add = (g, chord, label) => { if (!seen.has(g.title + chord)) { seen.add(g.title + chord); g.items.push({ chord, label }); } };
+  // スケールを選んでいるときは、そのスケールのコードを先頭に出す(モードでは V→I の解決が弱いので、下の機能和声の提案は応用として残す)
+  if (song.scale) {
+    const g0 = { title: `${SCALES[song.scale][0]}のコード(${SCALE_INFO[song.scale][0]})`, items: [] };
+    scaleBasics(song, ki, key).forEach((c) => add(g0, c, degreeOf(c, ki)));
+    groups.push(g0);
+  }
 
   const g1 = { title: prev ? `「${show(prev)}」の次に来やすい` : '最初のコード向き', items: [] };
   const pp = prev && parseChord(prev);
@@ -1619,7 +1642,8 @@ function scaleHelpHTML(s) {
   const curK = s.scale || (ki ? (ki.minor ? 'naturalMinor' : 'major') : '');
   const now = s.scale ? `<b>${SCALES[s.scale][0]}</b>:${SCALE_INFO[s.scale][0]}。${SCALE_INFO[s.scale][1]}`
     : `<b>KEYに合わせる</b>:KEY がメジャーならメジャー、マイナーならナチュラルマイナーとして扱います。${ki ? '' : '(KEY が未設定のあいだは C で鳴らします)'}`;
-  return `<div class="scale-help"><p class="muted">${now}</p>
+  const mis = scaleMismatch(s);
+  return `<div class="scale-help"><p class="muted">${now}${mis ? `<br><b>※ ${esc(mis)}</b>` : ''}${s.scale ? '<br>ディグリー・五度圏・提案も、このスケールのコードを基本にします。' : ''}</p>
     <details id="scaleList" ${scaleListOpen ? 'open' : ''}><summary>スケールそれぞれの感じ(▶で音が鳴ります)</summary>
     ${Object.entries(SCALES).map(([k, v]) => `<div class="sh-row ${curK === k ? 'on' : ''}">
       <button class="sh-play" data-act="scaleplay" data-v="${k}" aria-label="${v[0]}を鳴らす">▶</button>
@@ -1851,6 +1875,7 @@ function renderDispBar(s, ctx) {
         <button data-act="transpose" data-d="-1" ${tip('曲全体を半音下げます(KEYとすべてのコード)')}>移調 −1</button>
         <button data-act="transpose" data-d="1" ${tip('曲全体を半音上げます(KEYとすべてのコード)')}>＋1</button>
       </span>
+      <span class="edit-only">${capoSuggestHTML(s)}</span>
       <span class="brk"></span>
       <button data-act="pref" data-k="dgm" class="${prefs.dgm !== false ? 'on' : ''}" ${tip('コードの下にTAB(押さえ方)を出します。TABを押すとコードの音が鳴ります')}>TAB表示 ${prefs.dgm !== false ? 'ON' : 'OFF'}</button>
       <button data-act="pref" data-k="degree" class="${prefs.degree ? 'on' : ''}" ${tip('コードの下に度数(I・IV・V7 など)を出し、トニック/サブドミナント/ドミナントで色分けします')}>ディグリー</button>
@@ -2022,6 +2047,15 @@ document.addEventListener('click', async (ev) => {
     case 'undo': undo(); break;
     case 'redo': redo(); break;
     case 'toggle-view': viewing = !viewing; renderEditor(); break;
+    case 'capo-sug': {
+      const c = Number(el.dataset.v);
+      cur.capo = c; touch();
+      if (c > 0 && prefs.disp !== 'shape') { prefs.disp = 'shape'; savePrefs(); } // カポをつけたら押さえる形で見せる
+      renderEditor();
+      const p = capoPlans(cur);
+      flash(`${c ? `カポ${c}` : 'カポなし'}にしました(鳴る音はそのまま)。押さえ方:${p ? p.best.shapes.slice(0, 6).join('・') : ''}`);
+      break;
+    }
     case 'scaleplay': playScale(cur, el.dataset.v); break;
     case 'setscale': cur.scale = el.dataset.v; touch(); renderEditor(); break;
     case 'export': exportBackup(); break;
@@ -2088,7 +2122,8 @@ document.addEventListener('click', async (ev) => {
       const n = Number(el.dataset.d);
       if (!chordSeq(cur).length && !cur.key) { showToast('移調するコードもKEYもまだありません'); return; }
       transposeSong(n); touch(); renderEditor();
-      flash(`半音${n > 0 ? '上げ' : '下げ'}ました${cur.key ? `(KEY ${cur.key})` : ''}`);
+      const cp = capoPlans(cur), better = cp && cp.best.capo !== (cur.capo || 0) && cp.now.cost - cp.best.cost >= 1;
+      flash(`半音${n > 0 ? '上げ' : '下げ'}ました${cur.key ? `(KEY ${cur.key})` : ''}${better ? `。${cp.best.capo ? `カポ${cp.best.capo}` : 'カポなし'}にすると押さえやすくなります(💡のボタン)` : ''}`);
       break;
     }
     case 'sec-add': {
@@ -2292,6 +2327,43 @@ function usedChords() {
 }
 // カポ・チューニングがあるときは、押さえる形で見せる(実音は小さく)。開放弦で押さえやすい形には ★
 function easyShape(shape) { const v = voicings(shape)[0]; return !!v && !v.barre && Math.max(0, ...v.fr) <= 3; }
+// 押さえにくさ:開放弦の形は0、セーハ・高いフレットほど大きい。押さえ方が見つからないコードは大きめ
+function shapeCost(shape) {
+  const v = voicings(shape)[0];
+  if (!v) return 6;
+  if (easyShape(shape)) return 0;
+  const maxF = Math.max(0, ...v.fr);
+  return (v.barre ? 3 : 1.5) + Math.max(0, maxF - 3) * 0.4;
+}
+// カポ0〜7それぞれで、曲のコードを押さえる形にしたときの押さえにくさの合計(よく出るコードほど重く数える)
+const CAPO_MAX = 7;
+function capoPlans(s) {
+  const counts = new Map();
+  chordSeq(s).forEach(({ chord }) => { const p = parseChord(chord); if (p && !p.nc) counts.set(chord, (counts.get(chord) || 0) + 1); });
+  if (!counts.size) return null;
+  const key = effKey(s), plans = [];
+  for (let c = 0; c <= CAPO_MAX; c++) {
+    const shift = -c - (s.tuning || 0), style = spellerFor(key ? transposeKey(key, shift) : '');
+    let cost = 0, hard = 0;
+    const shapes = [];
+    counts.forEach((n, chord) => {
+      const sh = shift ? transposeChord(chord, shift, style) : chord, k = shapeCost(sh);
+      cost += k * n; if (k >= 3) hard += n;
+      if (!shapes.includes(sh)) shapes.push(sh);
+    });
+    plans.push({ capo: c, cost, hard, shapes });
+  }
+  const best = plans.reduce((a, b) => (b.cost < a.cost - 0.01 ? b : a)); // 同じなら低いカポ
+  return { plans, best, now: plans[Math.min(CAPO_MAX, s.capo || 0)] || plans[0] };
+}
+// 移調の欄の近くに出す提案。いまのカポより楽になるときだけボタンにする
+function capoSuggestHTML(s) {
+  const r = capoPlans(s);
+  if (!r) return '';
+  const { best, now } = r, list = (p) => p.shapes.slice(0, 6).map(esc).join('・') + (p.shapes.length > 6 ? '…' : '');
+  if (best.capo === (s.capo || 0) || now.cost - best.cost < 1) return `<span class="capo-sug ok" ${tip('カポ0〜7を比べて、セーハや高いフレットが少ない位置を探しています')}>👌 いまのカポ(${s.capo ? s.capo : 'なし'})がいちばん楽です</span>`;
+  return `<button class="capo-sug" data-act="capo-sug" data-v="${best.capo}" ${tip(`カポ0〜7を比べて、セーハや高いフレットがいちばん少ない位置です。押すとカポを変えます(鳴る音・KEYはそのまま。押さえ方だけ変わります)。いま:${list(now)}`)}>💡 ${best.capo ? `カポ${best.capo}` : 'カポなし'}がいちばん楽<small>${list(best)}${best.hard ? ` ・ セーハなど ${best.hard}か所` : ''}</small></button>`;
+}
 // 候補のボタン:押すと決定。小さいTABつき、右の ▶ で音だけ鳴らせる
 const pill = (chord, label, degFirst) => {
   const c = viewCtx(cur), shape = c.shift ? transposeChord(chord, c.shift, c.shapeStyle) : chord;
@@ -2306,6 +2378,12 @@ function degreeRows(ki, key) {
   const main = ki.minor ? [[0, 'm'], [2, 'm7(b5)'], [3, ''], [5, 'm'], [7, 'm'], [8, ''], [10, '']] : [[0, ''], [2, 'm'], [4, 'm'], [5, ''], [7, ''], [9, 'm'], [11, 'm7(b5)']];
   const extra = ki.minor ? [[7, ''], [7, '7'], [5, ''], [1, '']] : [[7, '7'], [10, ''], [8, ''], [5, 'm'], [2, ''], [4, ''], [0, '7']];
   const row = (l) => l.map(([iv, q]) => { const ch = mk(iv, q); return pill(ch, degreeOf(ch, keyInfo(key)), true); }).join('');
+  if (cur.scale) { // 選んだスケールの音だけでできるコードを基本にする
+    const basics = scaleBasics(cur, ki, key), basePcs = new Set(basics.map((c) => c));
+    const ext = extra.map(([iv, q]) => mk(iv, q)).filter((c) => !basePcs.has(c));
+    return `<h4>この KEY・スケールの基本(${esc(SCALES[cur.scale][0])})</h4><div class="pills">${basics.map((ch) => pill(ch, degreeOf(ch, ki), true)).join('')}</div>
+      <h4>よく使う応用(ドミナント・借用)</h4><div class="pills">${ext.map((ch) => pill(ch, degreeOf(ch, ki), true)).join('')}</div>`;
+  }
   return `<h4>このKEYの基本(ダイアトニック)</h4><div class="pills">${row(main)}</div><h4>よく使う応用(ドミナント・借用)</h4><div class="pills">${row(extra)}</div>`;
 }
 function renderPickLists() {
@@ -2319,7 +2397,7 @@ function renderPickLists() {
     $('pkSug').innerHTML = '<p class="muted">KEYを決めるか、コードを2つ以上置くと、記号つきの提案が出ます。</p>';
   } else {
     const vc = viewCtx(cur), shNote = [cur.capo ? `カポ${cur.capo}` : '', tuningLabel(cur.tuning)].filter(Boolean).join('+');
-    $('pkSug').innerHTML = `<p class="muted" style="margin:0">KEY ${esc(sg.key)}${cur.key ? '' : '(推定)'}を基準にしています${vc.shift ? `。${esc(shNote)}で押さえる形(押さえ方では KEY ${esc(transposeKey(sg.key, vc.shift))})で並べ、★は開放弦で押さえやすい形です` : '。★は開放弦で押さえやすい形です'}${pick.prev ? `。直前のコード:${esc(toInput(pick.prev))}` : ''}</p>`
+    $('pkSug').innerHTML = `<p class="muted" style="margin:0">KEY ${esc(sg.key)}${cur.key ? '' : '(推定)'}${cur.scale ? `・${esc(SCALES[cur.scale][0])}` : ''}を基準にしています${vc.shift ? `。${esc(shNote)}で押さえる形(押さえ方では KEY ${esc(transposeKey(sg.key, vc.shift))})で並べ、★は開放弦で押さえやすい形です` : '。★は開放弦で押さえやすい形です'}${pick.prev ? `。直前のコード:${esc(toInput(pick.prev))}` : ''}</p>`
       + sg.groups.filter((g) => g.items.length).map((g) => `<h4>${esc(g.title)}</h4><div class="pills">${g.items.map((x) => pill(x.chord, x.label)).join('')}</div>`).join('');
   }
   // スケールのコード
@@ -2337,7 +2415,7 @@ function renderPickLists() {
   // ディグリーから選ぶ
   {
     const key = effKey(cur), ki = keyInfo(key);
-    $('pkDegTitle').textContent = ki ? `KEY ${key}${cur.key ? '' : '(推定)'}の度数から選びます。大きい字が度数です` : '';
+    $('pkDegTitle').textContent = ki ? `KEY ${key}${cur.key ? '' : '(推定)'}${cur.scale ? `・${SCALES[cur.scale][0]}` : ''}の度数から選びます。大きい字が度数です${scaleMismatch(cur) ? `(${scaleMismatch(cur)})` : ''}` : '';
     $('pkDeg').innerHTML = ki ? degreeRows(ki, key) : '<p class="muted">KEYを決めると、I・IV・V などの度数からコードを選べます。</p>';
   }
   // この曲で使ったコード
@@ -2372,19 +2450,25 @@ function circleView() {
   const name = (pc, q) => sp(pc) + q; // 表示(入力の向き)
   const k0 = CIRCLE.indexOf(maj), R = 150, cx = 160, cy = 160;
   const deg = { 0: ['I', 'VIm'], 1: ['V', 'IIIm'], 11: ['IV', 'IIm'] };
+  // スケールを選んでいるときは、そのスケールのメジャー/マイナーの3和音に印を付ける(dim・aug は五度圏に無いので印なし)
+  let majOn = null, minOn = null;
+  if (cur.scale) {
+    majOn = new Set(); minOn = new Set();
+    scaleChords(ki.tonic, SCALES[cur.scale][1], 'sharp').forEach((r) => { const p = parseChord(r.triad); if (!p) return; const pc = mod12(NOTE_PC[p.root] + sh); if (p.quality === '') majOn.add(pc); else if (p.quality === 'm') minOn.add(pc); });
+  }
   const tonic = mod12(ki.tonic + sh), dOf = (pc, q) => ROMAN[mod12(pc - tonic)] + q; // KEYの主音からの度数(短調ならIm基準)
   let g = '';
   for (let i = 0; i < 12; i++) {
     const rel = mod12(i - k0), pc = CIRCLE[i], mn = mod12(pc + 9);
     const a0 = ((rel - 0.5) * 30 - 90) * Math.PI / 180, a1 = ((rel + 0.5) * 30 - 90) * Math.PI / 180;
-    const on = deg[rel], P = (r, a) => `${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`;
+    const onJ = majOn ? majOn.has(pc) : !!deg[rel], onN = minOn ? minOn.has(mn) : !!deg[rel], on = onJ || onN, P = (r, a) => `${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`;
     g += `<path d="M${P(R, a0)} A${R} ${R} 0 0 1 ${P(R, a1)} L${P(36, a1)} A36 36 0 0 0 ${P(36, a0)} Z" class="seg5 ${on ? 'on' : ''} ${rel === 0 ? 'ton' : ''}"/>`;
     const am = (rel * 30 - 90) * Math.PI / 180;
     const t = (r, txt, cls, chord) => `<text x="${cx + r * Math.cos(am)}" y="${cy + r * Math.sin(am)}" class="${cls}" data-cc="${esc(chord)}" text-anchor="middle" dominant-baseline="central">${esc(txt)}</text>`;
     const ring = (x) => (i >= 1 && i <= 6 ? SHARP : FLAT)[mod12(x)]; // 五度圏の決まった書き方:右側は♯、左側は♭
-    g += t(122, ring(pc), `mj ${on ? 'on' : ''}`, on ? name(pc, '') : ring(pc));
-    g += t(78, ring(mn) + 'm', `mn ${on ? 'on' : ''}`, on ? name(mn, 'm') : ring(mn) + 'm');
-    g += t(141, dOf(pc, ''), `dg5 ${on ? 'on' : ''}`, ''); g += t(57, dOf(mn, 'm'), `dg5 s ${on ? 'on' : ''}`, '');
+    g += t(122, ring(pc), `mj ${onJ ? 'on' : ''}`, onJ ? name(pc, '') : ring(pc));
+    g += t(78, ring(mn) + 'm', `mn ${onN ? 'on' : ''}`, onN ? name(mn, 'm') : ring(mn) + 'm');
+    g += t(141, dOf(pc, ''), `dg5 ${onJ ? 'on' : ''}`, ''); g += t(57, dOf(mn, 'm'), `dg5 s ${onN ? 'on' : ''}`, '');
   }
   const keyShown = useShape ? transposeKey(key, sh) : key;
   g += `<circle cx="${cx}" cy="${cy}" r="34" class="mid"/><text x="${cx}" y="${cy - 7}" text-anchor="middle" dominant-baseline="central" class="midt s">KEY</text><text x="${cx}" y="${cy + 8}" text-anchor="middle" dominant-baseline="central" class="midt">${esc(keyShown)}</text>`;
@@ -2401,7 +2485,7 @@ function useCircleChord(el) {
 }
 function renderPkC5() {
   const v = circleView();
-  $('pkC5').innerHTML = v ? `<p class="pane-note">真ん中がこの曲の KEY(${esc(v.key)}${cur.key ? '' : '・推定'}${v.useShape ? `、押さえ方では ${esc(v.keyShown)}` : ''})。緑の6つが基本のコード、小さい字は度数。押すと音が鳴り、入力欄に入ります。</p>${v.svg}
+  $('pkC5').innerHTML = v ? `<p class="pane-note">真ん中がこの曲の KEY(${esc(v.key)}${cur.key ? '' : '・推定'}${v.useShape ? `、押さえ方では ${esc(v.keyShown)}` : ''})。${cur.scale ? `緑が${esc(SCALES[cur.scale][0])}の基本のコード${scaleMismatch(cur) ? `(${esc(scaleMismatch(cur))})` : ''}` : '緑の6つが基本のコード'}、小さい字は度数。押すと音が鳴り、入力欄に入ります。</p>${v.svg}
     <div style="text-align:center"><button data-pk="circle">💡 コード進行の説明と定番の進行を見る</button></div>` : '<p class="muted">KEYを決めるか、コードを2つ以上置くと五度圏が出ます。</p>';
 }
 function openCircle() {
