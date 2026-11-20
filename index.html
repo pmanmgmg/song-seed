@@ -521,12 +521,22 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--sub); marg
 .tl.pin { margin-top: 6px; max-height: 45vh; overflow-y: auto; }
 .tl.pin .pin-lbl { position: sticky; left: 0; display: inline-block; font-size: 11px; color: var(--sub); padding: 2px 8px; }
 .trk.quiet .clip { opacity: .35; }
-.trh { position: sticky; left: 0; display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; padding: 5px 8px; width: min(100%, calc(100vw - 34px)); background: var(--panel); z-index: 2; box-sizing: border-box; }
+.trh { position: sticky; left: 0; display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; padding: 5px 8px; width: var(--tlW, min(100%, calc(100vw - 34px))); background: var(--panel); z-index: 2; box-sizing: border-box; }
 .trh input[data-ff="tname"] { flex: 1 1 auto; min-width: 56px; }
 .trh .vol-s { width: 90px; flex: 0 1 90px; min-width: 50px; }
+.trh .ico.none { border-style: dashed; color: var(--sub); font-size: 15px; }
 .trh .ico-s { display: inline-flex; color: var(--sub); } .trh .ico-s svg { width: 18px; height: 18px; }
 .trk.tc .trh .ico-s { color: color-mix(in srgb, var(--tc) 70%, var(--ink)); }
 .trh .pin-s { font-size: 12px; }
+.trh .pin-b { font-size: 13px; padding: 3px 5px; filter: grayscale(1); opacity: .45; }
+.trh .pin-b.on { filter: none; opacity: 1; border-color: var(--accent); }
+@media (max-width: 440px) { /* スマホ:見出し1行に収めるため、トラック名を残して音量のつまみを先に縮める */
+  .trh { gap: 3px; padding: 5px 6px; }
+  .trh button { padding: 3px 6px; }
+  .trh .ico { width: 30px; }
+  .trh input[data-ff="tname"] { flex: 1 0 88px; min-width: 88px; width: 88px; padding: 3px 5px; font-size: 14px; }
+  .trh .vol-s { flex: 0 1 80px; min-width: 32px; }
+}
 .trh .rt-s { padding: 2px 7px; font-size: 15px; }
 .trh .tmenu { font-size: 16px; padding: 1px 8px; }
 .lane.fold.rec { height: 18px; }
@@ -3096,6 +3106,8 @@ function setTopH() {
   const tb = document.querySelector('.topbar'), fh = $('fxHead');
   if (tb) document.documentElement.style.setProperty('--topH', tb.offsetHeight + 'px');
   if (fh) document.documentElement.style.setProperty('--headH', fh.offsetHeight + 'px'); // トラックの欄は、上の固定部分を除いた高さで縦にスクロールする
+  const tl = $('tl'); // トラック見出しを、トラック欄の見えている幅に収める(はみ出して「⋯」が隠れたため)
+  if (tl) document.documentElement.style.setProperty('--tlW', tl.clientWidth + 'px');
   const cp = document.querySelector('.clip-panel.dock');
   document.documentElement.style.setProperty('--panH', (cp ? cp.offsetHeight : 0) + 'px');
 }
@@ -3143,14 +3155,14 @@ function renderFull() {
     const html = `<div class="trk ${audible ? '' : 'quiet'} ${tc ? 'tc' : ''}" ${tc ? `style="--tc:${tc[1]}"` : ''}>
       <div class="trh">
         ${editing ? `<button class="tf" data-fa="tfold" data-tr="${t.id}" aria-label="${ui.fold ? '開く' : 'たたむ'}" ${tip(ui.fold ? 'テイクの段を開きます' : 'テイクの段をたたんで、1行にします')}><span class="chev ${ui.fold ? '' : 'open'}"></span></button>` : ''}
-        ${t.icon ? `<span class="ico-s" aria-label="${esc(INSTRUMENTS[t.icon][0])}">${icoSvg(t.icon)}</span>` : ''}
         ${editing ? '' : `<button class="rt-s ${recTr === t.id ? 'on rt' : ''}" data-fa="rtarget" data-tr="${t.id}" aria-label="録音先" ${tip('「● 録音」したとき、このトラックに新しいテイクとして入ります')}>${recTr === t.id ? '◉' : '○'}</button>`}
+        <button class="ico ${t.icon ? '' : 'none'}" data-fa="ticon" data-tr="${t.id}" aria-label="${t.icon ? esc(INSTRUMENTS[t.icon][0]) + '(記号を変える)' : '記号を付ける'}" ${tip('楽器の記号を付けます(ギター・ベース・ドラムなど)')}>${t.icon ? icoSvg(t.icon) : '♪'}</button>
         <input data-ff="tname" data-tr="${t.id}" value="${esc(t.name)}" aria-label="トラック名">
-        ${ui.pin ? '<span class="pin-s" aria-label="ピン留め中">📌</span>' : ''}
+        <button class="pin-b ${ui.pin ? 'on' : ''}" data-fa="tpin" data-tr="${t.id}" aria-label="${ui.pin ? 'ピン留めを外す' : '上にピン留めする'}" aria-pressed="${ui.pin}" ${tip(ui.pin ? 'ピン留めを外します' : '上の操作部分にピン留めして、スクロールしても見えるようにします')}>📌</button>
         <button data-fa="mute" data-tr="${t.id}" class="${t.mute ? 'on' : ''}" ${tip('ミュート:このトラックを一時的に鳴らさない')}>M</button>
         <button data-fa="solo" data-tr="${t.id}" class="${t.solo ? 'on' : ''}" ${tip('ソロ:ソロにしたトラックだけを鳴らす(複数可)。ミュート中のトラックもソロの間は鳴り、ソロを外すとミュートに戻ります')}>S</button>
         <input class="vol-s" type="range" data-ff="vol" data-tr="${t.id}" min="0" max="1.5" step="0.05" value="${t.vol}" aria-label="音量" ${tip('このトラックの音量(再生中も変えられます)')}>
-        <button class="tmenu" data-fa="tmenu" data-tr="${t.id}" aria-label="トラックのメニュー" ${tip('色・記号・ピン留め・つなぎの保存・削除など')}>⋯</button>
+        <button class="tmenu" data-fa="tmenu" data-tr="${t.id}" aria-label="トラックのメニュー" ${tip('色・つなぎの保存・削除など')}>⋯</button>
       </div>
       ${editing ? (ui.fold ? foldLane : lanes || '<div class="lane empty"><div class="lane-h"><span class="muted">まだテイクがありません。「録音」に切り替えて「● 録音」で録れます</span></div></div>') : recLane}
     </div>`;
@@ -3197,6 +3209,7 @@ function renderFull() {
         <span class="grp"><span class="lbl" ${tip('テイクの帯をどう触るか')}>帯の操作</span><span class="seg"><button data-fa="tool" data-v="edit" class="${fx.tool === 'edit' ? 'on' : ''}" ${tip('帯をドラッグで移動、両端のつまみで切り詰め')}>移動・切り詰め</button><button data-fa="tool" data-v="comp" class="${fx.tool === 'comp' ? 'on' : ''}" ${tip('帯を左右になぞると、その範囲だけそのテイクを使います(テイクのつなぎ)。濃い部分が実際に鳴る所')}>範囲で使う</button></span></span>
         <span class="grp"><span class="lbl" ${tip('ドラッグで動かす・切り詰める・なぞるときに吸い付く間隔。「自由」なら小節に関係なく動かせます。PC は option(Alt)キーを押しながらだと一時的に自由になります')}>グリッド</span>
         <span class="seg">${GRIDS.map(([v, l]) => `<button data-fa="grid" data-v="${v}" class="${gridName() === v ? 'on' : ''}">${l}</button>`).join('')}</span></span>
+        <button data-fa="click" class="${prefs.recClick ? 'on' : ''}" ${busy ? 'disabled' : ''} ${tip('再生中にクリック(メトロノーム)を鳴らします。録音の画面と同じ設定です')}>クリック ${prefs.recClick ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rec-opts view-opts">
         <span class="grp"><span class="lbl" ${tip('時間方向の表示の幅。Mac のトラックパッドならピンチ、または ⌘ を押しながらスクロールでも拡大・縮小できます')}>横の幅</span>
@@ -3391,8 +3404,6 @@ async function trackMenu(trId) {
   const html = `<h2>${esc(t.name)}</h2>
     <h3 class="c5h">色</h3><div class="sw-row"><button data-tm="color:" class="sw ${t.color ? '' : 'on'}">なし</button>${Object.entries(TRACK_COLORS).map(([k, v]) => `<button data-tm="color:${k}" class="sw ${t.color === k ? 'on' : ''}" style="background:${v[1]};color:#222">${v[0]}</button>`).join('')}</div>
     <div class="tm-list">
-      <button data-tm="ticon">${t.icon ? icoSvg(t.icon) : ''} 楽器の記号を${t.icon ? '変える' : '選ぶ'}</button>
-      <button data-tm="tpin">📌 ${ui.pin ? 'ピン留めを外す' : '上にピン留めする'}</button>
       ${t.takes.length > 1 ? '<button data-tm="compsave">つなぎ方を保存する</button>' : ''}
       ${(t.saved || []).length ? `<label class="muted">保存したつなぎ方<select id="tmLoad"><option value="">選ぶ…(${t.saved.length})</option>${t.saved.map((v) => `<option value="${v.id}">${esc(v.name)}</option>`).join('')}</select></label><button data-tm="compmenu">保存したつなぎ方を消す</button>` : ''}
       ${(t.comp || []).length ? '<button data-tm="clearcomp">範囲をリセット(基本のテイクだけに戻す)</button>' : ''}
