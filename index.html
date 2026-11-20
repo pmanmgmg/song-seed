@@ -481,7 +481,7 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--sub); marg
 .gridov .gb { stroke: var(--line); stroke-width: 1; }
 .gridov .gu { stroke: var(--line); stroke-width: 1; opacity: .5; }
 .ruler .rb { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); font-size: 11px; color: var(--sub); padding-left: 3px; pointer-events: none; }
-.mrow { position: relative; height: 26px; border-bottom: 1px solid var(--line); cursor: copy; }
+.mrow { position: sticky; top: 24px; z-index: 4; background: var(--panel); height: 26px; border-bottom: 1px solid var(--line); cursor: copy; } /* 目盛りと一緒に、縦にスクロールしても上に残す */
 .mrow .mempty { position: sticky; left: 0; display: inline-block; font-size: 11px; color: var(--sub); padding: 5px 8px; pointer-events: none; }
 .mk {
   position: absolute; top: 2px; bottom: 2px; border-radius: 5px; font-size: 12px; font-weight: 700; overflow: hidden;
@@ -563,6 +563,8 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--sub); marg
 }
 .clip.act { border-color: var(--accent); } /* 波形は灰色のまま、鳴る区間だけ .use の緑で示す */
 .clip.sel { outline: 2px solid var(--chord); outline-offset: 1px; z-index: 1; }
+@media (pointer: coarse) { .clip { touch-action: pan-x pan-y; -webkit-touch-callout: none; } } /* 指:なぞればスクロール、長押しでつかむ */
+.clip.grab { outline: 3px solid var(--accent); outline-offset: 1px; z-index: 3; filter: brightness(1.08); transform: scale(1.01); }
 .clip.miss { background: repeating-linear-gradient(45deg, transparent 0 6px, var(--line) 6px 8px); }
 .clip { opacity: .55; }
 .clip.act, .clip.sel { opacity: 1; }
@@ -3909,16 +3911,23 @@ document.addEventListener('pointercancel', endScrub);
 
 // 帯のドラッグ:本体で移動、両端で切り詰め
 const cd = { el: null };
+const LONG_PRESS_MS = 300;
+// つかんでいる間は、指の動きでページやトラック欄がスクロールしないようにする
+document.addEventListener('touchmove', (ev) => { if (cd.el && cd.armed) ev.preventDefault(); }, { passive: false });
 document.addEventListener('pointerdown', (ev) => {
   if (!fullView || !cur || fx.recState !== 'idle') return;
   const el = ev.target.closest && ev.target.closest('.clip');
   if (!el) return;
   const { tk } = findTake(el.dataset.tr, el.dataset.tk);
   if (!tk) return;
-  ev.preventDefault();
+  const touchy = ev.pointerType !== 'mouse';
+  if (!touchy) ev.preventDefault();
   fx.alt = !!ev.altKey;
   const comp = fx.tool === 'comp';
-  Object.assign(cd, { el, tr: el.dataset.tr, tk: tk.id, x: ev.clientX, moved: false, mode: comp ? 'comp' : ev.target.dataset.edge || 'move', o: { ...tk } });
+  clearTimeout(cd.timer);
+  Object.assign(cd, { el, tr: el.dataset.tr, tk: tk.id, x: ev.clientX, y: ev.clientY, moved: false, mode: comp ? 'comp' : ev.target.dataset.edge || 'move', o: { ...tk }, armed: !touchy, timer: 0 });
+  // 指では、なぞるとトラック欄のスクロール。帯を約0.3秒押し続けると「つかんだ」状態になり、そこから動かせる(スマホで帯とスクロールが取り合ったため)
+  if (touchy) cd.timer = setTimeout(() => { if (cd.el !== el) return; cd.armed = true; el.classList.add('grab'); try { navigator.vibrate && navigator.vibrate(12); } catch (e) {} }, LONG_PRESS_MS);
   if (comp) { // なぞり始めの曲の秒
     const r = el.getBoundingClientRect();
     cd.t0 = tk.offset + (ev.clientX - r.left) / fx.pps;
@@ -3927,6 +3936,10 @@ document.addEventListener('pointerdown', (ev) => {
 });
 document.addEventListener('pointermove', (ev) => {
   if (!cd.el) return;
+  if (!cd.armed) { // 長押しの前に指が動いた:スクロールに任せる
+    if (Math.hypot(ev.clientX - cd.x, ev.clientY - cd.y) > 8) { clearTimeout(cd.timer); cd.el = null; }
+    return;
+  }
   const dx = (ev.clientX - cd.x) / fx.pps;
   if (!cd.moved && Math.abs(ev.clientX - cd.x) < 4) return;
   cd.moved = true; ev.preventDefault();
@@ -3947,8 +3960,11 @@ document.addEventListener('pointermove', (ev) => {
   clampTake(tk);
   cd.el.style.left = tk.offset * fx.pps + 'px'; cd.el.style.width = Math.max(4, tk.length * fx.pps) + 'px';
 }, { passive: false });
-function endClipDrag() {
+function endClipDrag(ev) {
+  clearTimeout(cd.timer);
   if (!cd.el) return;
+  cd.el.classList.remove('grab');
+  if (ev && ev.type === 'pointercancel' && !cd.moved) { cd.el = null; return; } // スクロールに切り替わった
   const moved = cd.moved; fx.sel = { tr: cd.tr, tk: cd.tk };
   cd.el = null;
   if (cd.mode === 'comp') {
