@@ -4787,7 +4787,8 @@ async function exportBackup() {
   if (!sel.size) { showToast('曲が選ばれていないので書き出しませんでした'); return; }
   const pickSongs = songs.filter((x) => sel.has(x.id)), recs = allRecs.filter((r) => sel.has(r.songId));
   withAudio = withAudio && recs.length > 0;
-  const data = { app: APP_NAME, format: 2, exportedAt: new Date().toISOString(), songs: pickSongs, folders: allFolders() };
+  // フォルダは、選んだ曲が入っているものだけ書き出す(空のフォルダや、選んでいない曲のフォルダまで移さない)
+  const data = { app: APP_NAME, format: 2, exportedAt: new Date().toISOString(), songs: pickSongs, folders: allFolders().filter((f) => pickSongs.some((x) => x.folder === f)) };
   if (withAudio) {
     showToast('録音をまとめています…');
     data.recordings = [];
@@ -4806,7 +4807,9 @@ async function importBackup(file) {
   try { data = JSON.parse(await file.text()); } catch (e) { showMessage('読み込めませんでした(JSONファイルではありません)'); return; }
   const list = Array.isArray(data) ? data : data && Array.isArray(data.songs) ? data.songs : null;
   if (!list) { showMessage('Song Seed のバックアップではないようです'); return; }
-  if (data && Array.isArray(data.folders)) saveFolders([...allFolders(), ...data.folders.map(String).filter(Boolean)]);
+  // フォルダは、読み込む曲が実際に入っているものだけ作る(前の版のバックアップは全部のフォルダを持っているので、空のフォルダが勝手に増えないように)
+  { const used = new Set(list.filter((x) => x && typeof x === 'object' && x.folder).map((x) => String(x.folder)));
+    if (used.size) saveFolders([...allFolders(), ...used]); }
   let added = 0, updated = 0, kept = 0;
   for (const raw of list) {
     if (!raw || typeof raw !== 'object') continue;
