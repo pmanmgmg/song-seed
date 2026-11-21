@@ -428,7 +428,9 @@ body:not(.viewing) .view-only { display: none !important; }
 .playing .full-link, .playing .sec-title button, .playing .struct > button, .playing .legend .how { display: none !important; }
 .playing .wrap { padding-bottom: 70vh; } /* 最後の行も画面の上のほうまで送れるように */
 .playing .lyr .ln { margin-bottom: 4px; }
-@media (max-width: 600px) { .playing .bars { grid-template-columns: repeat(2, minmax(0, 1fr)); } } /* 大きな文字でもコード名が切れないよう、スマホは1段2小節 */
+.playing .cv .dgm { cursor: default; padding-right: 0; }
+.playing .cv .dgm::after { display: none; } /* 演奏用モードではコードの音を鳴らさないので、スピーカーの印も出さない */
+@media (max-width: 600px) { .playing:not(.pm-small) .bars { grid-template-columns: repeat(2, minmax(0, 1fr)); } } /* 大きな文字でもコード名が切れないよう、スマホは1段2小節 */
 
 /* PDF(印刷) */
 @media print {
@@ -1872,7 +1874,7 @@ function chordView(item, ctx) {
   if (prefs.dgm !== false && p && !p.nc && !bassOnly) {
     const dc = ctx.shift && prefs.disp !== 'sound' ? shape : chord;
     const svg = diagramSVG(dc, 0);
-    if (svg) html += `<span class="dgm" data-act="play-chord" data-c="${esc(chord)}" ${tip('TAB:押すとこのコードの音を鳴らします')}>${svg}</span>`;
+    if (svg) html += pm.on ? `<span class="dgm">${svg}</span>` : `<span class="dgm" data-act="play-chord" data-c="${esc(chord)}" ${tip('TAB:押すとこのコードの音を鳴らします')}>${svg}</span>`; // 演奏用モードでは音を鳴らさない
   }
   if (prefs.bass && p) {
     let note = p.nc ? '—' : (item.bass || p.bass || p.root);
@@ -1888,6 +1890,7 @@ function renderEditor() {
   document.body.classList.toggle('viewing', viewing);
   document.body.classList.toggle('playing', pm.on);
   document.body.style.setProperty('--pmz', pmZoom());
+  document.body.classList.toggle('pm-small', pmZoom() < 1); // 縮めたときはスマホでも1段4小節に戻す
   const fullLen = ensureFull(cur).tracks.some((t) => t.takes.length) ? timelineEnd(cur) : 0;
   const mode = pm.on ? 'play' : viewing ? 'view' : 'edit';
   const y = window.scrollY;
@@ -2113,7 +2116,8 @@ function transposeSong(n, s = cur) {
 /* ---------- 演奏用モード ---------- */
 // 曲のデータは変えずに、移調・カポを「その場だけ」変えて大きく表示し、テンポに合わせて自動でスクロールする
 const pm = { on: false, shift: 0, capo: null, run: false, speed: 1, t: 0, last: 0, raf: 0, wake: null, items: [], total: 0, touchAt: 0 };
-const pmZoom = () => num(prefs.pmZoom, 1, 2.2, 1.35);
+const PM_ZOOM = [0.3, 2.2], PM_SPEED = [0.2, 3]; // 表示の大きさ(30%まで縮めると曲全体を見渡せる)・自動スクロールの速さの範囲
+const pmZoom = () => num(prefs.pmZoom, PM_ZOOM[0], PM_ZOOM[1], 1.35);
 function pmSong() {
   const s = clone(cur);
   if (pm.shift) transposeSong(pm.shift, s);
@@ -2179,17 +2183,22 @@ function pmTimeAt(y) { // スクロール位置 → 曲の中の時間(手で動
   }
   return pm.total;
 }
-function pmStart() {
+// t を渡すと、その時間から続ける(表示の大きさ・移調を変えて並びが変わったとき)。渡さなければ今のスクロール位置から
+function pmStart(t) {
   pmBuild();
   if (!pm.items.length) { showToast('自動スクロールする歌詞・コードがまだありません'); return; }
-  pm.t = pmTimeAt(window.scrollY);
+  pm.t = t ?? pmTimeAt(window.scrollY);
   if (pm.t >= pm.total - 0.05) pm.t = 0;
-  pm.run = true; pm.last = performance.now();
+  pm.run = true; pm.last = performance.now(); pm.y = window.scrollY;
   const step = (now) => {
     if (!pm.run) return;
-    pm.t += (now - pm.last) / 1000 * pm.speed; pm.last = now;
+    const dt = Math.min(0.1, (now - pm.last) / 1000); pm.last = now; // 裏に回っていた分は飛ばさない
+    pm.t += dt * pm.speed; // 速さはその都度読むので、動いている最中に変えてもすぐ効く
     if (pm.t >= pm.total) { pmPause(); showToast('最後まで来ました'); return; }
-    window.scrollTo(0, Math.max(0, pmPosAt(pm.t)));
+    // 行ごとに速さが変わってカクつかないよう、目標の位置へなめらかに追いかける(位置は小数のまま持つ)
+    const target = Math.max(0, pmPosAt(pm.t));
+    pm.y += (target - pm.y) * (1 - Math.exp(-dt * 5));
+    window.scrollTo(0, pm.y);
     pm.raf = requestAnimationFrame(step);
   };
   pm.raf = requestAnimationFrame(step);
@@ -2210,6 +2219,13 @@ document.addEventListener('click', (ev) => {
   if (pm.run) pmPause(); else pmStart();
 });
 window.addEventListener('resize', () => { if (pm.run) { pmBuild(); } });
+// 並びが変わる操作(表示の大きさ・移調・カポ)のあと:同じ時間の位置へ合わせ、動いていれば続ける
+function pmRelayout(fn) {
+  const was = pm.run, t = pm.t;
+  pmPause(true); fn(); renderEditor();
+  if (was) pmStart(t);
+  else if (t > 0) { pmBuild(); if (pm.items.length) window.scrollTo(0, Math.max(0, pmPosAt(t))); }
+}
 // PDF:印刷用に整えた譜面で印刷の画面を開く。ファイル名は曲名になる
 function printScore() {
   stopViewPlay(); stopChordSeq();
@@ -2225,9 +2241,9 @@ function pmBarHTML(s) {
   const changed = pm.shift || pm.capo !== null;
   return `<div class="pm-bar"><div class="pm-in">
     <button id="pmRun" data-act="pm-run" class="pm-go ${pm.run ? 'on' : ''}" ${tip('テンポ(♩=' + cur.tempo + ')とコードの長さに合わせて、譜面を自動で送ります。画面を押すと止まり、もう一度押すと続きから')}>${pm.run ? '❚❚ 止める' : '▶ 自動スクロール'}</button>
-    <span class="seg pm-grp" ${tip('自動スクロールの速さ。100%がテンポどおり')}><button data-act="pm-speed" data-d="-1" aria-label="遅く">−</button><span class="pm-v">速さ ${pct}%</span><button data-act="pm-speed" data-d="1" aria-label="速く">＋</button></span>
+    <span class="seg pm-grp" ${tip('自動スクロールの速さ(20〜300%)。100%がテンポどおり。動いている最中に変えてもすぐ効きます')}><button data-act="pm-speed" data-d="-1" aria-label="遅く">−</button><span class="pm-v" id="pmSpeed">速さ ${pct}%</span><button data-act="pm-speed" data-d="1" aria-label="速く">＋</button></span>
     <span class="seg pm-grp" ${tip('その場で移調して表示します。曲のデータは変わりません')}><button data-act="pm-key" data-d="-1" aria-label="半音下げる">−</button><span class="pm-v">${s.key ? 'KEY ' + esc(s.key) : '移調'}${pm.shift ? `<small>${pm.shift > 0 ? '+' : ''}${pm.shift}</small>` : ''}</span><button data-act="pm-key" data-d="1" aria-label="半音上げる">＋</button></span>
-    <span class="seg pm-grp" ${tip('文字とコードの大きさ')}><button data-act="pm-zoom" data-d="-1" aria-label="文字を小さく">A−</button><button data-act="pm-zoom" data-d="1" aria-label="文字を大きく">A＋</button></span>
+    <span class="seg pm-grp" ${tip('譜面の表示の大きさ(30〜220%)。小さくすると曲全体を見渡せます')}><button data-act="pm-zoom" data-d="-1" aria-label="表示を小さく">−</button><span class="pm-v">表示の大きさ ${Math.round(z * 100)}%</span><button data-act="pm-zoom" data-d="1" aria-label="表示を大きく">＋</button></span>
   </div><div class="pm-in pm-sub">
     ${capoSuggestHTML(s, 'pm-capo')}
     ${changed ? `<button data-act="pm-reset" ${tip('移調とカポを、曲に保存してある状態に戻します')}>元のKEY・カポに戻す</button><span class="muted">演奏用の表示です(曲のデータは変わりません)</span>` : ''}
@@ -2266,25 +2282,29 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'pm-run': if (pm.run) pmPause(); else pmStart(); break;
-    case 'pm-speed': pm.speed = Math.round(Math.min(2, Math.max(0.5, pm.speed + Number(el.dataset.d) * 0.05)) * 100) / 100; renderEditor(); break;
-    case 'pm-zoom': { const run = pm.run; pmPause(true); prefs.pmZoom = Math.round(Math.min(2.2, Math.max(1, pmZoom() + Number(el.dataset.d) * 0.15)) * 100) / 100; savePrefs(); renderEditor(); if (run) pmStart(); break; }
+    case 'pm-speed': { // 画面は描き直さず、数字だけ変える(動いている最中もそのまま速さが変わる)
+      const d = Number(el.dataset.d), st = pm.speed < 1 || (pm.speed === 1 && d < 0) ? 0.1 : pm.speed < 2 || (pm.speed === 2 && d < 0) ? 0.1 : 0.25;
+      pm.speed = Math.round(Math.min(PM_SPEED[1], Math.max(PM_SPEED[0], pm.speed + d * st)) * 100) / 100;
+      const v = $('pmSpeed'); if (v) v.textContent = `速さ ${Math.round(pm.speed * 100)}%`;
+      break;
+    }
+    case 'pm-zoom': {
+      const z = pmZoom(), d = Number(el.dataset.d), st = z < 1 || (z === 1 && d < 0) ? 0.1 : 0.15;
+      pmRelayout(() => { prefs.pmZoom = Math.round(Math.min(PM_ZOOM[1], Math.max(PM_ZOOM[0], z + d * st)) * 100) / 100; savePrefs(); });
+      break;
+    }
     case 'pm-key': {
-      const run = pm.run; pmPause(true);
-      pm.shift = ((pm.shift + Number(el.dataset.d) + 17) % 12) - 5; // −5〜+6 の範囲で回す
-      renderEditor(); if (run) pmStart();
+      pmRelayout(() => { pm.shift = ((pm.shift + Number(el.dataset.d) + 17) % 12) - 5; }); // −5〜+6 の範囲で回す
       const ps = pmSong(), cp = capoPlans(ps), better = cp && cp.best.capo !== (ps.capo || 0) && cp.now.cost - cp.best.cost >= 1;
       showToast(`${pm.shift ? `半音${Math.abs(pm.shift)}つ${pm.shift > 0 ? '上げ' : '下げ'}` : '元のKEY'}で表示しています${ps.key ? `(KEY ${ps.key})` : ''}${better ? `。${cp.best.capo ? `カポ${cp.best.capo}` : 'カポなし'}が押さえやすい(💡)` : ''}`);
       break;
     }
     case 'pm-capo': {
-      const run = pm.run; pmPause(true);
-      pm.capo = Number(el.dataset.v);
-      if (pm.capo > 0 && prefs.disp !== 'shape') { prefs.disp = 'shape'; savePrefs(); }
-      renderEditor(); if (run) pmStart();
+      pmRelayout(() => { pm.capo = Number(el.dataset.v); if (pm.capo > 0 && prefs.disp !== 'shape') { prefs.disp = 'shape'; savePrefs(); } });
       showToast(`${pm.capo ? `カポ${pm.capo}` : 'カポなし'}の押さえ方で表示しています(曲のデータは変わりません)`);
       break;
     }
-    case 'pm-reset': { const run = pm.run; pmPause(true); pm.shift = 0; pm.capo = null; renderEditor(); if (run) pmStart(); break; }
+    case 'pm-reset': pmRelayout(() => { pm.shift = 0; pm.capo = null; }); break;
     case 'vp-full': viewPlayFull(); break;
     case 'vp-take': if (sec) viewPlayTake(sec.id); break;
     case 'pdf': printScore(); break;
@@ -4620,7 +4640,7 @@ const FAQ = [
   { k: ['移調', 'キーを変', '上げ', '下げ'], q: '曲全体を移調するには?', a: '「コードの表示方法」の行の「移調 −1/＋1」で、KEYとすべてのコードを半音ずつ動かせます。' },
   { k: ['ベース', 'ベース欄'], q: 'ベースの音を出すには?', a: '「ベース欄 ON」で、全部のコードの下にベースが弾く音を出します。「ベースだけ」でコード名を隠せます。チューニングを下げているときは、ベースもその形で出すか選べます。' },
   { k: ['閲覧', '見る', '譜面'], q: '譜面だけを見るには?', a: '右上の切り替えで「<b>👁 閲覧</b>」にすると、編集用のボタンを隠して譜面だけにできます。曲名の下に「▶ 通し録音を聴く」(通し録音があるとき)と「📄 PDF・共有」が出ます。' },
-  { k: ['演奏', 'ライブ', 'スクロール', '自動', '弾き'], q: '演奏しながら見るには?', a: '右上の切り替えで「<b>🎸 演奏</b>」にします。文字とコードが大きくなり、「▶ 自動スクロール」でテンポとコードの長さに合わせて譜面が進みます(速さは −/＋ で調整)。譜面に触れると止まり、指で位置を合わせてからもう一度押すと続きから進みます。演奏中は画面が暗くなりません。' },
+  { k: ['演奏', 'ライブ', 'スクロール', '自動', '弾き'], q: '演奏しながら見るには?', a: '右上の切り替えで「<b>🎸 演奏</b>」にします。文字とコードが大きくなり(「表示の大きさ −/＋」で30〜220%。小さくすると曲全体を見渡せます)、「▶ 自動スクロール」でテンポとコードの長さに合わせて譜面が進みます(速さは −/＋ で20〜300%。動いている最中に変えてもすぐ効きます)。演奏用モードではTABを押してもコードの音は鳴りません。譜面に触れると止まり、指で位置を合わせてからもう一度押すと続きから進みます。演奏中は画面が暗くなりません。' },
   { k: ['移調', 'キー', 'key', 'カポ', '演奏'], q: '演奏するときだけKEYやカポを変えるには?', a: '「🎸 演奏」の画面の <b>KEY −/＋</b> でその場で移調して表示し、「💡 カポ○がいちばん楽」で押さえやすいカポの形にできます。どちらも<b>曲のデータは変わりません</b>(「元のKEY・カポに戻す」で戻ります)。曲そのものを移調するときは編集の画面の「移調 −1/＋1」です。' },
   { k: ['pdf', '印刷', '共有', 'line', 'airdrop', '送'], q: 'PDFにして送るには?', a: '「👁 閲覧」にして、曲名の下の「<b>📄 PDF・共有</b>」を押します。印刷の画面が開くので、iPhone は右上の共有ボタンから LINE・AirDrop・ファイルへ、Mac は左下の「PDF」から保存できます。' },
   { k: ['再生', '聴', '聞', '素材', '通し', 'マイク'], q: '閲覧の画面で録音を聴くには?', a: '曲全体の<b>通し録音</b>は、曲名の下の横長の「▶ 通し録音を聴く」。パートごとの<b>素材録音</b>は、パート名の横の<b>マイクの丸ボタン</b>で、いちばん新しいテイクが鳴ります(隣の「○本」でテイクの一覧)。' },
