@@ -4829,8 +4829,17 @@ async function importBackup(file) {
     }
   }
   if (cur) cur = songs.find((x) => x.id === cur.id) || null;
-  const noAudio = !Array.isArray(data.recordings) && list.some((x) => x && x.full && Array.isArray(x.full.tracks) && x.full.tracks.some((t) => (t.takes || []).length));
-  await showMessage(`読み込みました。\n追加 ${added}曲 / 更新 ${updated}曲 / 手元の方が新しいので据え置き ${kept}曲${recAdded ? `\n録音 ${recAdded}本を取り込みました` : ''}${noAudio ? '\n\nこのバックアップには録音の音声が入っていません。録音を鳴らすには、録音した端末で「バックアップ書き出し」→「録音も入れる」で書き出し直してください。' : ''}`);
+  // 録音の案内は、この端末に音声が無いテイクがあるときだけ出す(録音した端末で読み込み直したときに誤って出さない)
+  let noAudio = false;
+  if (!Array.isArray(data.recordings) && storageOk) {
+    const ids = list.flatMap((x) => (x && x.full && Array.isArray(x.full.tracks) ? x.full.tracks.flatMap((t) => (t.takes || []).map((k) => k.id)) : []));
+    for (const id of ids) { try { if (!(await recGet(id))) { noAudio = true; break; } } catch (e) { noAudio = true; break; } }
+  }
+  // どのファイルを読んだか分かるように、書き出した日時と中の曲名を出す(似た名前のファイルを取り違えたときに気づける)
+  const when = data && data.exportedAt ? fmtDate(Date.parse(data.exportedAt)) : '';
+  const titles = list.filter((x) => x && typeof x === 'object').map((x) => x.title || '無題の曲');
+  const names = titles.slice(0, 8).join('・') + (titles.length > 8 ? ` ほか${titles.length - 8}曲` : '');
+  await showMessage(`読み込みました。\n追加 ${added}曲 / 更新 ${updated}曲 / 手元の方が新しいので据え置き ${kept}曲${recAdded ? `\n録音 ${recAdded}本を取り込みました` : ''}\n\nこのファイルの中身:${titles.length}曲(${names})${when ? `\n書き出した日時:${when}` : ''}${!added && !updated ? '\n\n新しく入った曲はありません。入れたい曲が入っていないときは、別のファイルを選んでいないか確かめてください。' : ''}${noAudio ? '\n\nこのバックアップには録音の音声が入っていません。録音を鳴らすには、録音した端末で「バックアップ書き出し」→「録音も入れる」で書き出し直してください。' : ''}`);
   route();
 }
 
