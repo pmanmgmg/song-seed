@@ -428,6 +428,11 @@ body:not(.viewing) .view-only { display: none !important; }
 .playing .full-link, .playing .sec-title button, .playing .struct > button, .playing .legend .how { display: none !important; }
 .playing .wrap { padding-bottom: 70vh; } /* 最後の行も画面の上のほうまで送れるように */
 .playing .lyr .ln { margin-bottom: 4px; }
+.playing .struct { display: none !important; } /* 演奏用モードでは構成の行を出さない */
+.pm-barsnote { display: none; }
+.pm-nochords #secs .bars, .pm-nochords #secs .lyr .ch, .pm-nochords .dispbar, .pm-nochords .legend { display: none !important; } /* コードを隠すときは表示の設定・ディグリーの説明も隠す */
+.pm-nochords #secs .pm-barsnote { display: block; color: var(--sub); font-size: 14px; padding: 2px 0 6px; }
+.pm-nochords #secs .lyr .ln { margin-bottom: 2px; }
 .playing .cv .dgm { cursor: default; padding-right: 0; }
 .playing .cv .dgm::after { display: none; } /* 演奏用モードではコードの音を鳴らさないので、スピーカーの印も出さない */
 @media (max-width: 600px) { .playing:not(.pm-small) .bars { grid-template-columns: repeat(2, minmax(0, 1fr)); } } /* 大きな文字でもコード名が切れないよう、スマホは1段2小節 */
@@ -1891,6 +1896,7 @@ function renderEditor() {
   document.body.classList.toggle('playing', pm.on);
   document.body.style.setProperty('--pmz', pmZoom());
   document.body.classList.toggle('pm-small', pmZoom() < 1); // 縮めたときはスマホでも1段4小節に戻す
+  document.body.classList.toggle('pm-nochords', pm.on && prefs.pmChords === false); // 演奏用:コードを隠して歌詞だけ
   const fullLen = ensureFull(cur).tracks.some((t) => t.takes.length) ? timelineEnd(cur) : 0;
   const mode = pm.on ? 'play' : viewing ? 'view' : 'edit';
   const y = window.scrollY;
@@ -1935,6 +1941,7 @@ function renderEditor() {
       </div>
       <div class="foot edit-only"><button class="danger" data-act="del-song" ${tip('この曲と、この曲の録音をすべて削除します')}>この曲を削除</button></div>
     </div>`;
+  pmFitWidth();
   window.scrollTo(0, y);
 }
 function renderDispBar(s, ctx) {
@@ -1992,7 +1999,7 @@ function renderSection(sec, idx, total, ctx) {
   const takes = recCount[sec.id] || 0;
   let body;
   if (sec.mode === 'bars') {
-    body = renderBars(sec, ctx);
+    body = renderBars(sec, ctx) + `<div class="pm-barsnote">演奏のみ・${sec.bars.length}小節</div>`;
   } else if (mode === 'write' && !viewing) {
     body = `<p class="hint">歌詞を書いたら「コードを置く」へ。あとで歌詞を直しても、置いたコードは文字についていきます。</p>
       <textarea class="lyrics" data-sec="${sec.id}" placeholder="歌詞を1行ずつ">${esc(sec.lines.map((l) => l.text).join('\n'))}</textarea>`;
@@ -2143,6 +2150,15 @@ function pmExit() {
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pmWake(); else pmPause(true); });
 // 1行(演奏のみは1段)ごとの長さ:コードの長さ(拍。決めていなければ1小節)の合計。コードのない歌詞の行は1小節。繰り返しはその分ゆっくり進む
+// 縮めたとき:譜面の幅を「100%のときの幅」に固定して、演奏のみのマス目も歌詞と一緒にそのまま小さくする
+// (固定しないと、zoom で縮めた分だけ横に広がり、マス目が画面いっぱいに伸びる)
+function pmFitWidth() {
+  const el = $('secs');
+  if (!el) return;
+  if (!pm.on || pmZoom() >= 1) { el.style.width = ''; return; }
+  const w = el.parentElement, cs = getComputedStyle(w);
+  el.style.width = Math.max(200, w.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + 'px';
+}
 function pmBuild() {
   const n = beatsPerBar(cur), spb = 60 / cur.tempo, items = [];
   const top = (el) => el.getBoundingClientRect().top + window.scrollY;
@@ -2154,6 +2170,7 @@ function pmBuild() {
       const rows = [];
       se.querySelectorAll('.bars .bar').forEach((b) => { const y = top(b), r = rows[rows.length - 1]; if (r && Math.abs(r.y - y) < 4) r.n++; else rows.push({ y, n: 1 }); });
       rows.forEach((r) => items.push({ y: r.y, dur: r.n * n * spb * rep }));
+      if (!rows.length) items.push({ y: top(se), dur: sec.bars.length * n * spb * rep }); // コードを隠しているときは見出しの位置で待つ
     } else {
       const lns = se.querySelectorAll('.lyr .ln');
       sec.lines.forEach((ln, i) => {
@@ -2218,7 +2235,7 @@ document.addEventListener('click', (ev) => {
   if (!onScore(ev) || Date.now() - pm.touchAt < 600) return;
   if (pm.run) pmPause(); else pmStart();
 });
-window.addEventListener('resize', () => { if (pm.run) { pmBuild(); } });
+window.addEventListener('resize', () => { pmFitWidth(); if (pm.run) { pmBuild(); } });
 // 並びが変わる操作(表示の大きさ・移調・カポ)のあと:同じ時間の位置へ合わせ、動いていれば続ける
 function pmRelayout(fn) {
   const was = pm.run, t = pm.t;
@@ -2244,6 +2261,7 @@ function pmBarHTML(s) {
     <span class="seg pm-grp" ${tip('自動スクロールの速さ(20〜300%)。100%がテンポどおり。動いている最中に変えてもすぐ効きます')}><button data-act="pm-speed" data-d="-1" aria-label="遅く">−</button><span class="pm-v" id="pmSpeed">速さ ${pct}%</span><button data-act="pm-speed" data-d="1" aria-label="速く">＋</button></span>
     <span class="seg pm-grp" ${tip('その場で移調して表示します。曲のデータは変わりません')}><button data-act="pm-key" data-d="-1" aria-label="半音下げる">−</button><span class="pm-v">${s.key ? 'KEY ' + esc(s.key) : '移調'}${pm.shift ? `<small>${pm.shift > 0 ? '+' : ''}${pm.shift}</small>` : ''}</span><button data-act="pm-key" data-d="1" aria-label="半音上げる">＋</button></span>
     <span class="seg pm-grp" ${tip('譜面の表示の大きさ(30〜220%)。小さくすると曲全体を見渡せます')}><button data-act="pm-zoom" data-d="-1" aria-label="表示を小さく">−</button><span class="pm-v">表示の大きさ ${Math.round(z * 100)}%</span><button data-act="pm-zoom" data-d="1" aria-label="表示を大きく">＋</button></span>
+    <button data-act="pm-chords" class="${prefs.pmChords === false ? '' : 'on'}" aria-pressed="${prefs.pmChords !== false}" ${tip('コード名とTABを出すかどうか。OFFにすると歌詞だけになります(演奏のみのパートは見出しと小節数だけ)')}>コード表示 ${prefs.pmChords === false ? 'OFF' : 'ON'}</button>
   </div><div class="pm-in pm-sub">
     ${capoSuggestHTML(s, 'pm-capo')}
     ${changed ? `<button data-act="pm-reset" ${tip('移調とカポを、曲に保存してある状態に戻します')}>元のKEY・カポに戻す</button><span class="muted">演奏用の表示です(曲のデータは変わりません)</span>` : ''}
@@ -2305,6 +2323,7 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'pm-reset': pmRelayout(() => { pm.shift = 0; pm.capo = null; }); break;
+    case 'pm-chords': pmRelayout(() => { prefs.pmChords = prefs.pmChords === false; savePrefs(); }); break;
     case 'vp-full': viewPlayFull(); break;
     case 'vp-take': if (sec) viewPlayTake(sec.id); break;
     case 'pdf': printScore(); break;
@@ -3350,11 +3369,7 @@ $('recSheet').addEventListener('click', async (ev) => {
   else if (k === 'close') closeRec();
   else if (k === 'dl') {
     const t = rec.takes[Number(b.dataset.i)];
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(t.blob);
-    a.download = `${cur.title || '無題の曲'}_${t.name}.${extOf(t.mime)}`.replace(/[\\/:*?"<>|]/g, '_');
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    saveFile(t.blob, `${cur.title || '無題の曲'}_${t.name}.${extOf(t.mime)}`);
   } else if (k === 'del') {
     const t = rec.takes[Number(b.dataset.i)];
     if (!(await askConfirm(`「${t.name}」を削除します。録音は元に戻せません。`, '削除する'))) return;
@@ -4061,11 +4076,41 @@ function wavBlob(buf) {
   for (let i = 0; i < len; i++) for (let c = 0; c < ch; c++) { const v = Math.max(-1, Math.min(1, chans[c][i])); data.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true); o += 2; }
   return new Blob([data], { type: 'audio/wav' });
 }
-function download(blob, name) {
+function download(blob, name) { return saveFile(blob, name); }
+// ファイルを端末に保存する。準備(録音をまとめるなど)に時間がかかると、ブラウザが「ボタンを押した直後」と見なさず
+// 保存や共有を黙って止めることがある(iPhone・ホーム画面に置いた版で特に)。そこで準備ができたら確認の画面を出し、
+// そのボタンを押した瞬間に保存・共有する。ホーム画面の版ではダウンロードが効かないので共有(「"ファイル"に保存」)を使う
+const fmtSize = (n) => n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1)} MB`;
+function saveByLink(blob, name) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = name.replace(/[\\/:*?"<>|]/g, '_');
+  a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+async function saveFile(blob, name) {
+  name = name.replace(/[\\/:*?"<>|]/g, '_');
+  let file = null;
+  try { file = new File([blob], name, { type: blob.type || 'application/octet-stream' }); } catch (e) { /* 古い端末 */ }
+  const canShare = !!(file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] }));
+  const standalone = !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
+  const mobile = !finePointer();
+  const shareFirst = canShare && (mobile || standalone);
+  const btns = [{ label: 'やめる', value: '' }];
+  if (canShare) btns.push({ label: mobile ? '共有・"ファイル"に保存' : '共有', value: 'share', cls: shareFirst ? 'primary' : '' });
+  if (!standalone || !canShare) btns.push({ label: 'ダウンロード', value: 'dl', cls: shareFirst ? '' : 'primary' });
+  const v = await dialog(`<h2>書き出しの準備ができました</h2><p><b>${esc(name)}</b>(${fmtSize(blob.size)})</p>
+    <p class="muted">${canShare ? 'iPhone は「共有」から「"ファイル"に保存」・AirDrop・LINE などへ送れます。' : ''}Mac・PC は「ダウンロード」でダウンロードフォルダに入ります。</p>
+    <p class="muted">Claude アプリの中の画面など、保存できない画面もあります。そのときは Safari・Chrome で開いてください。</p>`, btns);
+  if (v === 'share') {
+    try { await navigator.share({ files: [file] }); /* title を付けると iPhone では文字の項目が1つ増え、ファイルに保存で2つ保存される */ showToast(`${name} を送りました`); return true; } catch (e) {
+      if (e && e.name === 'AbortError') { showToast('書き出しをやめました'); return false; }
+      console.error(e);
+      if (standalone) { showMessage(`共有できませんでした(${e && e.name ? e.name : 'エラー'})。Safari で開いて書き出してください。`); return false; }
+      saveByLink(blob, name); showToast(`共有できなかったので、ダウンロードにしました:${name}`); return true;
+    }
+  }
+  if (v === 'dl') { saveByLink(blob, name); showToast(`${name} をダウンロードしました。見つからないときは、ダウンロードフォルダかブラウザのダウンロード一覧を見てください`); return true; }
+  return false;
 }
 async function exportMix() {
   await loadFullBuffers();
@@ -4077,8 +4122,7 @@ async function exportMix() {
   scheduleTracks(oc, oc.destination, 0, 0);
   const out = await new Promise((res, rej) => { const p = oc.startRendering(); if (p && p.then) p.then(res, rej); else oc.oncomplete = (e) => res(e.renderedBuffer); });
   const d = new Date();
-  download(wavBlob(out), `${cur.title || '無題の曲'}_通し_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.wav`);
-  showToast(`WAV を書き出しました(${fmtPos(end)})`);
+  await download(wavBlob(out), `${cur.title || '無題の曲'}_通し_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.wav`);
 }
 
 /* 操作 */
@@ -4640,7 +4684,7 @@ const FAQ = [
   { k: ['移調', 'キーを変', '上げ', '下げ'], q: '曲全体を移調するには?', a: '「コードの表示方法」の行の「移調 −1/＋1」で、KEYとすべてのコードを半音ずつ動かせます。' },
   { k: ['ベース', 'ベース欄'], q: 'ベースの音を出すには?', a: '「ベース欄 ON」で、全部のコードの下にベースが弾く音を出します。「ベースだけ」でコード名を隠せます。チューニングを下げているときは、ベースもその形で出すか選べます。' },
   { k: ['閲覧', '見る', '譜面'], q: '譜面だけを見るには?', a: '右上の切り替えで「<b>👁 閲覧</b>」にすると、編集用のボタンを隠して譜面だけにできます。曲名の下に「▶ 通し録音を聴く」(通し録音があるとき)と「📄 PDF・共有」が出ます。' },
-  { k: ['演奏', 'ライブ', 'スクロール', '自動', '弾き'], q: '演奏しながら見るには?', a: '右上の切り替えで「<b>🎸 演奏</b>」にします。文字とコードが大きくなり(「表示の大きさ −/＋」で30〜220%。小さくすると曲全体を見渡せます)、「▶ 自動スクロール」でテンポとコードの長さに合わせて譜面が進みます(速さは −/＋ で20〜300%。動いている最中に変えてもすぐ効きます)。演奏用モードではTABを押してもコードの音は鳴りません。譜面に触れると止まり、指で位置を合わせてからもう一度押すと続きから進みます。演奏中は画面が暗くなりません。' },
+  { k: ['演奏', 'ライブ', 'スクロール', '自動', '弾き'], q: '演奏しながら見るには?', a: '右上の切り替えで「<b>🎸 演奏</b>」にします。文字とコードが大きくなり(「表示の大きさ −/＋」で30〜220%。小さくすると曲全体を見渡せます)、「▶ 自動スクロール」でテンポとコードの長さに合わせて譜面が進みます(速さは −/＋ で20〜300%。動いている最中に変えてもすぐ効きます)。「コード表示 ON/OFF」で歌詞だけにもできます。演奏用モードではTABを押してもコードの音は鳴らず、構成の行も出しません。譜面に触れると止まり、指で位置を合わせてからもう一度押すと続きから進みます。演奏中は画面が暗くなりません。' },
   { k: ['移調', 'キー', 'key', 'カポ', '演奏'], q: '演奏するときだけKEYやカポを変えるには?', a: '「🎸 演奏」の画面の <b>KEY −/＋</b> でその場で移調して表示し、「💡 カポ○がいちばん楽」で押さえやすいカポの形にできます。どちらも<b>曲のデータは変わりません</b>(「元のKEY・カポに戻す」で戻ります)。曲そのものを移調するときは編集の画面の「移調 −1/＋1」です。' },
   { k: ['pdf', '印刷', '共有', 'line', 'airdrop', '送'], q: 'PDFにして送るには?', a: '「👁 閲覧」にして、曲名の下の「<b>📄 PDF・共有</b>」を押します。印刷の画面が開くので、iPhone は右上の共有ボタンから LINE・AirDrop・ファイルへ、Mac は左下の「PDF」から保存できます。' },
   { k: ['再生', '聴', '聞', '素材', '通し', 'マイク'], q: '閲覧の画面で録音を聴くには?', a: '曲全体の<b>通し録音</b>は、曲名の下の横長の「▶ 通し録音を聴く」。パートごとの<b>素材録音</b>は、パート名の横の<b>マイクの丸ボタン</b>で、いちばん新しいテイクが鳴ります(隣の「○本」でテイクの一覧)。' },
@@ -4752,13 +4796,9 @@ async function exportBackup() {
   const blob = new Blob([JSON.stringify(data, null, withAudio ? 0 : 2)], { type: 'application/json' });
   const d = new Date();
   const name = `SongSeed_バックアップ_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}${withAudio ? '_録音つき' : ''}.json`;
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  if (!(await saveFile(blob, name))) return; // 保存・共有が済んだときだけ「最後に書き出した日」を更新する
   lsSet(LS_BACKUP, String(Date.now()));
   if (!cur) renderList();
-  showToast(`${name} を書き出しました`);
 }
 async function importBackup(file) {
   if (!file) return;
