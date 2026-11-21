@@ -386,6 +386,64 @@ body:not(.viewing) .view-only { display: none !important; }
 .viewing .sec { border: none; box-shadow: none; background: transparent; padding: 4px 0; margin: 8px 0 14px; }
 .viewing .bar .slot { cursor: default; }
 
+/* 画面の切り替え(編集・閲覧・演奏) */
+.mode3 button { padding: 6px 9px; }
+.mode3 .ml { margin-left: 3px; font-size: 13px; }
+/* スマホ幅:記号の下に小さく名前を出して幅を詰める。閲覧・演奏では ↶↷ を隠す */
+.viewing #btnUndo, .viewing #btnRedo { display: none; }
+@media (max-width: 420px) {
+  .mode3 button { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.05; padding: 3px 6px; }
+  .mode3 .ml { font-size: 10px; margin: 1px 0 0; }
+  .topbar [data-act="back"] { padding: 6px 6px; }
+  .topbar-in { gap: 3px; }
+  .topbar .status { width: 2.3em; font-size: 10px; line-height: 1.15; white-space: normal; text-align: center; }
+}
+
+/* 閲覧:通し録音は曲名の下の横長ボタン、素材録音はパート見出しのマイクの丸ボタン */
+.view-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.vp-full { flex: 1 1 240px; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 16px; font-size: 16px; font-weight: 800; border-radius: 12px; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.vp-full .vp-t { font-weight: 400; font-size: 13px; opacity: .85; font-variant-numeric: tabular-nums; }
+.vp-full.on { background: var(--panel); color: var(--accent); }
+.vp-pdf { padding: 10px 14px; border-radius: 12px; }
+.sec-title .vp-take { position: relative; width: 34px; height: 34px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); border: 2px solid var(--accent); }
+.vp-take svg { width: 19px; height: 19px; }
+.vp-take .vp-pl { position: absolute; right: -5px; bottom: -3px; width: 15px; height: 15px; border-radius: 50%; background: var(--accent); }
+.vp-take .vp-pl::after { content: ''; position: absolute; left: 5px; top: 3.5px; border-left: 6px solid var(--accent-ink); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+.vp-take.on { background: var(--accent); color: var(--accent-ink); }
+.vp-take.on .vp-pl::after { left: 4px; top: 4px; border: none; width: 7px; height: 7px; background: var(--accent-ink); }
+.sec-title .vp-n { font-size: 12px; padding: 2px 6px; color: var(--sub); }
+
+/* 演奏用モード */
+.pm-bar { max-width: 860px; margin: 8px auto 0; display: flex; flex-direction: column; gap: 6px; }
+.pm-in { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pm-go { font-weight: 800; padding: 8px 14px !important; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.pm-go.on { background: var(--panel); color: var(--accent); }
+.pm-grp { align-items: center; }
+.pm-grp .pm-v { padding: 0 8px; font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pm-grp .pm-v small { margin-left: 3px; color: var(--chord); font-weight: 700; }
+.pm-sub { font-size: 13px; }
+.pm-sub:empty { display: none; }
+.playing #secs { zoom: var(--pmz, 1.35); }
+.playing .song-head .title { font-size: 20px; }
+.playing .full-link, .playing .sec-title button, .playing .struct > button, .playing .legend .how { display: none !important; }
+.playing .wrap { padding-bottom: 70vh; } /* 最後の行も画面の上のほうまで送れるように */
+.playing .lyr .ln { margin-bottom: 4px; }
+@media (max-width: 600px) { .playing .bars { grid-template-columns: repeat(2, minmax(0, 1fr)); } } /* 大きな文字でもコード名が切れないよう、スマホは1段2小節 */
+
+/* PDF(印刷) */
+@media print {
+  :root { --bg: #fff; --panel: #fff; --ink: #000; --sub: #555; --line: #bbb; --accent: #1f5e42; --accent-soft: #fff; --chord: #a23a20; --bass: #1d4d94; --hit: #fff; }
+  body { background: #fff !important; color: #000; }
+  .topbar, .view-acts, .dispbar, .full-link, .sheet, .sheet-bg, .edit-only, .sec-title button, .struct > button, .legend .how, #toast, .toast, .tipbox, .pm-bar { display: none !important; }
+  .wrap { max-width: none; padding: 0; }
+  #secs { zoom: 1 !important; }
+  .sec { break-inside: auto; box-shadow: none !important; }
+  .sec-title { break-after: avoid; }
+  .lyr .ln, .bars .bar, .bars { break-inside: avoid; }
+  .cplay { background: none !important; }
+  @page { margin: 12mm 10mm; }
+}
+
 /* 下から出るシート(コード選択・録音) */
 .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; display: none; }
 .sheet {
@@ -1825,9 +1883,13 @@ function chordView(item, ctx) {
   return `<span class="cv">${html}</span>`;
 }
 function renderEditor() {
-  const s = cur;
+  const s = pm.on ? pmSong() : cur;
   const ctx = viewCtx(s);
   document.body.classList.toggle('viewing', viewing);
+  document.body.classList.toggle('playing', pm.on);
+  document.body.style.setProperty('--pmz', pmZoom());
+  const fullLen = ensureFull(cur).tracks.some((t) => t.takes.length) ? timelineEnd(cur) : 0;
+  const mode = pm.on ? 'play' : viewing ? 'view' : 'edit';
   const y = window.scrollY;
   $('app').innerHTML = `
     <div class="topbar"><div class="topbar-in">
@@ -1839,8 +1901,12 @@ function renderEditor() {
       ${finePointer() ? `<button class="ghost ${prefs.tips ? 'on' : ''}" data-act="pref" data-k="tips" aria-label="ボタンの説明" ${tip('ボタンにカーソルを当てたときの説明を出すかどうか')}>💬${prefs.tips ? '' : '<s>説明</s>'}</button>` : ''}
       <button class="ghost bug-btn" data-act="bug" aria-label="不具合を報告" ${tip('おかしな動きを見つけたら、ここから報告文を作って送れます')}>🐞<span class="bug-l">不具合</span></button>
       <button class="ghost" data-act="help" aria-label="使い方" ${tip('使い方の説明・質問')}>？</button>
-      <button data-act="toggle-view" class="${viewing ? 'on' : ''}" ${tip('編集用のボタンを隠して、譜面だけを見ます')}>${viewing ? '✎ 編集' : '👁 閲覧'}</button>
-    </div></div>
+      <span class="seg mode3" role="tablist" aria-label="画面の切り替え">
+        <button data-act="set-mode" data-v="edit" class="${mode === 'edit' ? 'on' : ''}" role="tab" aria-selected="${mode === 'edit'}" ${tip('歌詞・コードを書く画面')}>✎<span class="ml">編集</span></button>
+        <button data-act="set-mode" data-v="view" class="${mode === 'view' ? 'on' : ''}" role="tab" aria-selected="${mode === 'view'}" ${tip('編集用のボタンを隠して譜面だけを見ます。PDF書き出し・録音の再生もここから')}>👁<span class="ml">閲覧</span></button>
+        <button data-act="set-mode" data-v="play" class="${mode === 'play' ? 'on' : ''}" role="tab" aria-selected="${mode === 'play'}" ${tip('演奏しながら見る画面:大きな文字・自動スクロール・その場で移調・カポの提案。画面が暗くなりません')}>🎸<span class="ml">演奏</span></button>
+      </span>
+    </div>${pm.on ? pmBarHTML(s) : ''}</div>
     <div class="wrap ${prefs.bass && prefs.bassOnly ? 'bass-only' : ''}">
       <div class="song-head">
         ${viewing ? `<div class="band" id="sumBand">${esc(s.band)}</div>
@@ -1849,6 +1915,10 @@ function renderEditor() {
         <label class="h-lbl">曲名</label><input class="h-title" data-f="title" value="${esc(s.title)}" placeholder="曲名(押して入力)" aria-label="曲名" ${tip('押すと曲名を書けます')}>`}
         <div class="chips" id="sumChips">${summaryChips(s)}</div>
         <div class="est edit-only" id="keyEst">${keyEstimateHTML(s)}</div>
+        ${viewing && !pm.on ? `<div class="view-acts">
+          ${fullLen ? `<button id="vpFull" class="vp-full ${vplay.kind === 'full' ? 'on' : ''}" data-act="vp-full" data-len="${fmtSec(fullLen)}" ${tip('通し録音(記録用)を、曲の頭から流します。ミュート・ソロ・音量は通し録音の画面の設定どおり')}><span class="vp-l">${vplay.kind === 'full' ? '■ 止める' : '▶ 通し録音を聴く'}</span><span class="vp-t">${fmtSec(fullLen)}</span></button>` : ''}
+          <button class="vp-pdf" data-act="pdf" ${tip('この譜面をPDFにします。印刷の画面が開くので、iPhone は右上の共有ボタンから LINE・AirDrop・ファイルへ、Mac は左下の「PDF」から保存できます')}>📄 PDF・共有</button>
+        </div>` : ''}
       </div>
       ${chipPanelHTML(s)}
       ${renderDispBar(s, ctx)}
@@ -1936,7 +2006,7 @@ function renderSection(sec, idx, total, ctx) {
     </div>
     <div class="sec-title view-only">${esc(sec.label || sec.type)}${rep}
       <button data-act="chord-seq" data-id="${sec.id}" data-label="▶ コード" class="${chordAudio.seq && chordAudio.seq.id === sec.id ? 'on' : ''}" ${tip('このパートのコードを、テンポに合わせて順に鳴らします(歌詞ありは1コード1小節)')}>${chordAudio.seq && chordAudio.seq.id === sec.id ? '■ 止める' : '▶ コード'}</button>
-      <button class="rec-btn" data-act="rec-open" ${tip('このセクションを録音・再生します')}><span class="rdot">●</span>${takes ? ' ' + takes : ''}</button></div>
+      ${takes ? `<button class="vp-take ${vplay.kind === 'take' && vplay.id === sec.id ? 'on' : ''}" data-act="vp-take" aria-label="このパートの素材録音を再生" ${tip('このパートの素材録音(いちばん新しいテイク)を鳴らします。もう一度押すと止まります')}><svg ${SVG_ATTR}>${INSTRUMENTS.vocal[1]}</svg><span class="vp-pl"></span></button><button class="vp-n" data-act="rec-open" ${tip('このパートのテイクの一覧(聞き比べ・録音)')}>${takes}本</button>` : `<button class="rec-btn" data-act="rec-open" ${tip('このセクションを録音・再生します')}><span class="rdot">●</span></button>`}</div>
     <div class="sec-tools edit-only">
       <span class="seg">
         <button data-act="sec-mode" data-v="lyrics" class="${sec.mode === 'lyrics' ? 'on' : ''}" ${tip('歌のある部分用。歌詞の上にコードを置きます')}>歌詞あり</button>
@@ -2009,11 +2079,12 @@ async function route() {
   if (fullView && !wantFull) leaveFull();
   fullView = wantFull;
   if (song) {
-    if (!cur || cur.id !== song.id) { cur = song; resetHistory(); await loadRecCount(); }
+    if (!cur || cur.id !== song.id) { stopViewPlay(); pmExit(); viewing = false; cur = song; resetHistory(); await loadRecCount(); }
     cur = song;
     if (fullView) openFull(); else renderEditor();
   } else {
     stopMetro();
+    stopViewPlay(); pmExit();
     cur = null; viewing = false; renderList();
   }
   window.scrollTo(0, 0);
@@ -2027,16 +2098,140 @@ async function go(hash) {
 const findSec = (id) => cur && cur.sections.find((x) => x.id === id);
 const flash = (msg) => showToast(msg, { label: '元に戻す', fn: undo });
 
-function transposeSong(n) {
-  const key = effKey(cur);
+function transposeSong(n, s = cur) {
+  const key = effKey(s);
   const newKey = key ? transposeKey(key, n) : '';
   const style = spellerFor(newKey);
   const tc = (c) => transposeChord(c, n, style);
-  for (const sec of cur.sections) {
+  for (const sec of s.sections) {
     for (const ln of sec.lines) for (const c of ln.chords) { c.chord = tc(c.chord); c.bass = transposeNote(c.bass, n, style); }
     for (const bar of sec.bars) for (const sl of bar) { sl.chord = tc(sl.chord); sl.bass = transposeNote(sl.bass, n, style); }
   }
-  if (cur.key) cur.key = newKey;
+  if (s.key) s.key = newKey;
+}
+
+/* ---------- 演奏用モード ---------- */
+// 曲のデータは変えずに、移調・カポを「その場だけ」変えて大きく表示し、テンポに合わせて自動でスクロールする
+const pm = { on: false, shift: 0, capo: null, run: false, speed: 1, t: 0, last: 0, raf: 0, wake: null, items: [], total: 0, touchAt: 0 };
+const pmZoom = () => num(prefs.pmZoom, 1, 2.2, 1.35);
+function pmSong() {
+  const s = clone(cur);
+  if (pm.shift) transposeSong(pm.shift, s);
+  if (pm.capo !== null) s.capo = pm.capo;
+  return s;
+}
+async function pmWake() {
+  try { if (pm.on && navigator.wakeLock && !pm.wake) { pm.wake = await navigator.wakeLock.request('screen'); pm.wake.addEventListener('release', () => { pm.wake = null; }); } } catch (e) { /* 対応していない端末では何もしない */ }
+}
+function pmEnter() {
+  stopChordSeq(); stopViewPlay();
+  Object.assign(pm, { on: true, shift: 0, capo: null, run: false, t: 0 });
+  viewing = true; chipOpen = '';
+  pmWake();
+}
+function pmExit() {
+  if (!pm.on) return;
+  pmPause();
+  pm.on = false;
+  try { if (pm.wake) pm.wake.release(); } catch (e) { /* 解放済み */ }
+  pm.wake = null;
+  document.body.classList.remove('playing');
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pmWake(); else pmPause(true); });
+// 1行(演奏のみは1段)ごとの長さ:コードの長さ(拍。決めていなければ1小節)の合計。コードのない歌詞の行は1小節。繰り返しはその分ゆっくり進む
+function pmBuild() {
+  const n = beatsPerBar(cur), spb = 60 / cur.tempo, items = [];
+  const top = (el) => el.getBoundingClientRect().top + window.scrollY;
+  for (const sec of cur.sections) {
+    const se = document.querySelector(`#secs .sec[data-sec="${sec.id}"]`);
+    if (!se) continue;
+    const rep = Math.max(1, sec.repeat || 1);
+    if (sec.mode === 'bars') {
+      const rows = [];
+      se.querySelectorAll('.bars .bar').forEach((b) => { const y = top(b), r = rows[rows.length - 1]; if (r && Math.abs(r.y - y) < 4) r.n++; else rows.push({ y, n: 1 }); });
+      rows.forEach((r) => items.push({ y: r.y, dur: r.n * n * spb * rep }));
+    } else {
+      const lns = se.querySelectorAll('.lyr .ln');
+      sec.lines.forEach((ln, i) => {
+        if (!lns[i]) return;
+        const beats = ln.chords.reduce((a, c) => a + (c.beats || n), 0) || (ln.text.trim() ? n : 0);
+        if (beats) items.push({ y: top(lns[i]), dur: beats * spb * rep });
+      });
+    }
+  }
+  let t = 0;
+  for (const it of items) { it.t = t; t += it.dur; }
+  pm.items = items; pm.total = t;
+}
+const pmAnchor = () => Math.round(window.innerHeight * 0.32); // 今の行を画面の上から1/3あたりに置く
+function pmPosAt(t) {
+  const it = pm.items;
+  let i = it.findIndex((x) => x.t + x.dur > t); if (i < 0) i = it.length - 1;
+  const a = it[i], nextY = it[i + 1] ? it[i + 1].y : a.y + 60, f = Math.max(0, Math.min(1, (t - a.t) / (a.dur || 1)));
+  return a.y + (nextY - a.y) * f - pmAnchor();
+}
+function pmTimeAt(y) { // スクロール位置 → 曲の中の時間(手で動かした所から続けるため)
+  const it = pm.items, p = y + pmAnchor();
+  if (!it.length || p <= it[0].y) return 0;
+  for (let i = 0; i < it.length; i++) {
+    const nextY = it[i + 1] ? it[i + 1].y : it[i].y + 60;
+    if (p < nextY) return it[i].t + it[i].dur * Math.max(0, Math.min(1, (p - it[i].y) / ((nextY - it[i].y) || 1)));
+  }
+  return pm.total;
+}
+function pmStart() {
+  pmBuild();
+  if (!pm.items.length) { showToast('自動スクロールする歌詞・コードがまだありません'); return; }
+  pm.t = pmTimeAt(window.scrollY);
+  if (pm.t >= pm.total - 0.05) pm.t = 0;
+  pm.run = true; pm.last = performance.now();
+  const step = (now) => {
+    if (!pm.run) return;
+    pm.t += (now - pm.last) / 1000 * pm.speed; pm.last = now;
+    if (pm.t >= pm.total) { pmPause(); showToast('最後まで来ました'); return; }
+    window.scrollTo(0, Math.max(0, pmPosAt(pm.t)));
+    pm.raf = requestAnimationFrame(step);
+  };
+  pm.raf = requestAnimationFrame(step);
+  pmRefresh();
+}
+function pmPause(quiet) {
+  if (!pm.run) return;
+  pm.run = false; cancelAnimationFrame(pm.raf);
+  if (!quiet) pmRefresh();
+}
+function pmRefresh() { const b = $('pmRun'); if (b) { b.classList.toggle('on', pm.run); b.innerHTML = pm.run ? '❚❚ 止める' : '▶ 自動スクロール'; } }
+// 譜面に触れたら止める(指でスクロールして位置を合わせられる)。止まっているときに譜面を押すと、その位置から続ける
+const onScore = (ev) => pm.on && ev.target.closest && ev.target.closest('#secs, .song-head') && !ev.target.closest('[data-act], button, select, input');
+document.addEventListener('touchstart', (ev) => { if (pm.run && onScore(ev)) { pmPause(); pm.touchAt = Date.now(); } }, { passive: true });
+document.addEventListener('wheel', () => { if (pm.run) { pmPause(); pm.touchAt = Date.now(); } }, { passive: true });
+document.addEventListener('click', (ev) => {
+  if (!onScore(ev) || Date.now() - pm.touchAt < 600) return;
+  if (pm.run) pmPause(); else pmStart();
+});
+window.addEventListener('resize', () => { if (pm.run) { pmBuild(); } });
+// PDF:印刷用に整えた譜面で印刷の画面を開く。ファイル名は曲名になる
+function printScore() {
+  stopViewPlay(); stopChordSeq();
+  const t0 = document.title;
+  document.title = [cur.title || '無題の曲', cur.band].filter(Boolean).join(' - ');
+  document.body.classList.add('printing');
+  const done = () => { document.title = t0; document.body.classList.remove('printing'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => { try { window.print(); } catch (e) { console.error(e); showToast('この画面では印刷を開けませんでした。Safari・Chrome で開いてください'); } setTimeout(done, 1500); }, 50);
+}
+function pmBarHTML(s) {
+  const pct = Math.round(pm.speed * 100), z = pmZoom();
+  const changed = pm.shift || pm.capo !== null;
+  return `<div class="pm-bar"><div class="pm-in">
+    <button id="pmRun" data-act="pm-run" class="pm-go ${pm.run ? 'on' : ''}" ${tip('テンポ(♩=' + cur.tempo + ')とコードの長さに合わせて、譜面を自動で送ります。画面を押すと止まり、もう一度押すと続きから')}>${pm.run ? '❚❚ 止める' : '▶ 自動スクロール'}</button>
+    <span class="seg pm-grp" ${tip('自動スクロールの速さ。100%がテンポどおり')}><button data-act="pm-speed" data-d="-1" aria-label="遅く">−</button><span class="pm-v">速さ ${pct}%</span><button data-act="pm-speed" data-d="1" aria-label="速く">＋</button></span>
+    <span class="seg pm-grp" ${tip('その場で移調して表示します。曲のデータは変わりません')}><button data-act="pm-key" data-d="-1" aria-label="半音下げる">−</button><span class="pm-v">${s.key ? 'KEY ' + esc(s.key) : '移調'}${pm.shift ? `<small>${pm.shift > 0 ? '+' : ''}${pm.shift}</small>` : ''}</span><button data-act="pm-key" data-d="1" aria-label="半音上げる">＋</button></span>
+    <span class="seg pm-grp" ${tip('文字とコードの大きさ')}><button data-act="pm-zoom" data-d="-1" aria-label="文字を小さく">A−</button><button data-act="pm-zoom" data-d="1" aria-label="文字を大きく">A＋</button></span>
+  </div><div class="pm-in pm-sub">
+    ${capoSuggestHTML(s, 'pm-capo')}
+    ${changed ? `<button data-act="pm-reset" ${tip('移調とカポを、曲に保存してある状態に戻します')}>元のKEY・カポに戻す</button><span class="muted">演奏用の表示です(曲のデータは変わりません)</span>` : ''}
+  </div></div>`;
 }
 
 document.addEventListener('click', async (ev) => {
@@ -2057,12 +2252,42 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'open-song': go('#song=' + encodeURIComponent(el.dataset.id)); break;
-    case 'back': stopChordSeq(); go(''); break;
+    case 'back': stopChordSeq(); stopViewPlay(); pmExit(); go(''); break;
     case 'help': openHelp(); break;
     case 'bug': openBugReport(); break;
     case 'undo': undo(); break;
     case 'redo': redo(); break;
     case 'toggle-view': viewing = !viewing; renderEditor(); break;
+    case 'set-mode': {
+      const v = el.dataset.v;
+      if (v === 'play') { if (!pm.on) pmEnter(); }
+      else { pmExit(); viewing = v === 'view'; if (!viewing) stopViewPlay(); }
+      hideTip(); renderEditor(); window.scrollTo(0, 0);
+      break;
+    }
+    case 'pm-run': if (pm.run) pmPause(); else pmStart(); break;
+    case 'pm-speed': pm.speed = Math.round(Math.min(2, Math.max(0.5, pm.speed + Number(el.dataset.d) * 0.05)) * 100) / 100; renderEditor(); break;
+    case 'pm-zoom': { const run = pm.run; pmPause(true); prefs.pmZoom = Math.round(Math.min(2.2, Math.max(1, pmZoom() + Number(el.dataset.d) * 0.15)) * 100) / 100; savePrefs(); renderEditor(); if (run) pmStart(); break; }
+    case 'pm-key': {
+      const run = pm.run; pmPause(true);
+      pm.shift = ((pm.shift + Number(el.dataset.d) + 17) % 12) - 5; // −5〜+6 の範囲で回す
+      renderEditor(); if (run) pmStart();
+      const ps = pmSong(), cp = capoPlans(ps), better = cp && cp.best.capo !== (ps.capo || 0) && cp.now.cost - cp.best.cost >= 1;
+      showToast(`${pm.shift ? `半音${Math.abs(pm.shift)}つ${pm.shift > 0 ? '上げ' : '下げ'}` : '元のKEY'}で表示しています${ps.key ? `(KEY ${ps.key})` : ''}${better ? `。${cp.best.capo ? `カポ${cp.best.capo}` : 'カポなし'}が押さえやすい(💡)` : ''}`);
+      break;
+    }
+    case 'pm-capo': {
+      const run = pm.run; pmPause(true);
+      pm.capo = Number(el.dataset.v);
+      if (pm.capo > 0 && prefs.disp !== 'shape') { prefs.disp = 'shape'; savePrefs(); }
+      renderEditor(); if (run) pmStart();
+      showToast(`${pm.capo ? `カポ${pm.capo}` : 'カポなし'}の押さえ方で表示しています(曲のデータは変わりません)`);
+      break;
+    }
+    case 'pm-reset': { const run = pm.run; pmPause(true); pm.shift = 0; pm.capo = null; renderEditor(); if (run) pmStart(); break; }
+    case 'vp-full': viewPlayFull(); break;
+    case 'vp-take': if (sec) viewPlayTake(sec.id); break;
+    case 'pdf': printScore(); break;
     case 'capo-sug': {
       const c = Number(el.dataset.v);
       cur.capo = c; touch();
@@ -2373,12 +2598,12 @@ function capoPlans(s) {
   return { plans, best, now: plans[Math.min(CAPO_MAX, s.capo || 0)] || plans[0] };
 }
 // 移調の欄の近くに出す提案。いまのカポより楽になるときだけボタンにする
-function capoSuggestHTML(s) {
+function capoSuggestHTML(s, act = 'capo-sug') {
   const r = capoPlans(s);
   if (!r) return '';
   const { best, now } = r, list = (p) => p.shapes.slice(0, 6).map(esc).join('・') + (p.shapes.length > 6 ? '…' : '');
   if (best.capo === (s.capo || 0) || now.cost - best.cost < 1) return `<span class="capo-sug ok" ${tip('カポ0〜7を比べて、セーハや高いフレットが少ない位置を探しています')}>👌 いまのカポ(${s.capo ? s.capo : 'なし'})がいちばん楽です</span>`;
-  return `<button class="capo-sug" data-act="capo-sug" data-v="${best.capo}" ${tip(`カポ0〜7を比べて、セーハや高いフレットがいちばん少ない位置です。押すとカポを変えます(鳴る音・KEYはそのまま。押さえ方だけ変わります)。いま:${list(now)}`)}>💡 ${best.capo ? `カポ${best.capo}` : 'カポなし'}がいちばん楽<small>${list(best)}${best.hard ? ` ・ セーハなど ${best.hard}か所` : ''}</small></button>`;
+  return `<button class="capo-sug" data-act="${act}" data-v="${best.capo}" ${tip(`カポ0〜7を比べて、セーハや高いフレットがいちばん少ない位置です。押すとカポを変えます(鳴る音・KEYはそのまま。押さえ方だけ変わります)${act === 'pm-capo' ? '。演奏用の表示だけで、曲のデータは変わりません' : ''}。いま:${list(now)}`)}>💡 ${best.capo ? `カポ${best.capo}` : 'カポなし'}がいちばん楽<small>${list(best)}${best.hard ? ` ・ セーハなど ${best.hard}か所` : ''}</small></button>`;
 }
 // 候補のボタン:押すと決定。小さいTABつき、右のスピーカーで音だけ鳴らせる
 const pill = (chord, label, degFirst) => {
@@ -3220,6 +3445,7 @@ async function loadFullBuffers1() {
   return true;
 }
 async function openFull() {
+  stopViewPlay(); pmExit();
   fx.sel = null; fx.pos = 0; fx.recTrack = '';
   fx.bufs.clear(); fx.peaks.clear(); fx.missing.clear();
   renderFull();
@@ -3650,6 +3876,55 @@ async function fullPlay() {
   if (prefs.recClick) startGridMetro(when, fx.pos);
   fx.startCtx = when; fx.startPos = fx.pos; fx.playing = true;
   renderFull(); animate();
+}
+/* 閲覧の画面での再生:通し録音(曲名の下の横長ボタン)と、パートの素材録音(パートの見出しのマイクの丸ボタン) */
+const vplay = { kind: '', id: '', srcs: [], t0: 0, end: 0, raf: 0 };
+function stopViewPlay() {
+  vplay.srcs.forEach((s) => { try { s.stop(); } catch (e) { /* 止め済み */ } });
+  vplay.srcs = []; cancelAnimationFrame(vplay.raf);
+  const was = vplay.kind; vplay.kind = ''; vplay.id = '';
+  if (was) refreshViewPlay();
+}
+function refreshViewPlay() {
+  const fb = $('vpFull');
+  if (fb) { const on = vplay.kind === 'full'; fb.classList.toggle('on', on); fb.querySelector('.vp-l').textContent = on ? '■ 止める' : '▶ 通し録音を聴く'; if (!on) fb.querySelector('.vp-t').textContent = fb.dataset.len; }
+  document.querySelectorAll('[data-act="vp-take"]').forEach((b) => b.classList.toggle('on', vplay.kind === 'take' && vplay.id === b.closest('.sec').dataset.sec));
+}
+function viewPlayTick() {
+  const c = audioCtx();
+  const step = () => {
+    if (!vplay.kind) return;
+    const t = c.currentTime - outLatency(c) - vplay.t0;
+    if (t > vplay.end + 0.2) { stopViewPlay(); return; }
+    const el = vplay.kind === 'full' && document.querySelector('#vpFull .vp-t');
+    if (el) el.textContent = `${fmtSec(Math.max(0, t))} / ${fmtSec(vplay.end)}`;
+    vplay.raf = requestAnimationFrame(step);
+  };
+  vplay.raf = requestAnimationFrame(step);
+}
+async function viewPlayFull() {
+  if (vplay.kind === 'full') { stopViewPlay(); return; }
+  stopViewPlay(); stopChordSeq();
+  await loadFullBuffers();
+  const end = mixEnd(cur);
+  if (!end) { showToast('通し録音の音声がこの端末にありません(録音した端末で「録音も入れる」で書き出すと移せます)'); return; }
+  const c = fullCtx(), when = c.currentTime + 0.08;
+  Object.assign(vplay, { kind: 'full', id: '', srcs: scheduleTracks(c, fx.mix, 0, when), t0: when, end });
+  refreshViewPlay(); viewPlayTick();
+}
+async function viewPlayTake(secId) {
+  if (vplay.kind === 'take' && vplay.id === secId) { stopViewPlay(); return; }
+  stopViewPlay(); stopChordSeq();
+  let take = null;
+  try { take = (await recAll()).filter((r) => r.songId === cur.id && r.secId === secId && r.blob).sort((a, b) => b.createdAt - a.createdAt)[0]; } catch (e) { console.error(e); }
+  if (!take) { showToast('このパートの録音がこの端末にありません'); return; }
+  let buf;
+  try { buf = await decodeBlob(take.blob); } catch (e) { console.error(e); showToast('録音を読み込めませんでした'); return; }
+  const c = audioCtx(), when = c.currentTime + 0.05, src = c.createBufferSource(), g = c.createGain();
+  src.buffer = buf; g.gain.value = take.gain || 1; src.connect(g); g.connect(c.destination); src.start(when);
+  Object.assign(vplay, { kind: 'take', id: secId, srcs: [src], t0: when, end: buf.duration });
+  refreshViewPlay(); viewPlayTick();
+  showToast(`素材録音「${take.name}」を再生${(recCount[secId] || 0) > 1 ? `(いちばん新しいテイク。ほかのテイクは右の「${recCount[secId]}本」から)` : ''}`);
 }
 function stopPlayback() {
   fx.sources.forEach((s) => { try { s.stop(); } catch (e) { /* 止め済み */ } });
@@ -4344,7 +4619,11 @@ const FAQ = [
   { k: ['曲', '削除', '消', '除去'], q: '曲を削除するには?', a: '曲の一覧で、曲の右の「<b>⋯</b>」→「削除」。曲の画面のいちばん下の「この曲を削除」でも消せます(録音も消え、戻せません)。' },
   { k: ['移調', 'キーを変', '上げ', '下げ'], q: '曲全体を移調するには?', a: '「コードの表示方法」の行の「移調 −1/＋1」で、KEYとすべてのコードを半音ずつ動かせます。' },
   { k: ['ベース', 'ベース欄'], q: 'ベースの音を出すには?', a: '「ベース欄 ON」で、全部のコードの下にベースが弾く音を出します。「ベースだけ」でコード名を隠せます。チューニングを下げているときは、ベースもその形で出すか選べます。' },
-  { k: ['閲覧', '見る', 'ライブ', '演奏'], q: '譜面だけを見るには?', a: '右上の「<b>👁 閲覧</b>」で、編集用のボタンを隠して譜面だけにできます。' },
+  { k: ['閲覧', '見る', '譜面'], q: '譜面だけを見るには?', a: '右上の切り替えで「<b>👁 閲覧</b>」にすると、編集用のボタンを隠して譜面だけにできます。曲名の下に「▶ 通し録音を聴く」(通し録音があるとき)と「📄 PDF・共有」が出ます。' },
+  { k: ['演奏', 'ライブ', 'スクロール', '自動', '弾き'], q: '演奏しながら見るには?', a: '右上の切り替えで「<b>🎸 演奏</b>」にします。文字とコードが大きくなり、「▶ 自動スクロール」でテンポとコードの長さに合わせて譜面が進みます(速さは −/＋ で調整)。譜面に触れると止まり、指で位置を合わせてからもう一度押すと続きから進みます。演奏中は画面が暗くなりません。' },
+  { k: ['移調', 'キー', 'key', 'カポ', '演奏'], q: '演奏するときだけKEYやカポを変えるには?', a: '「🎸 演奏」の画面の <b>KEY −/＋</b> でその場で移調して表示し、「💡 カポ○がいちばん楽」で押さえやすいカポの形にできます。どちらも<b>曲のデータは変わりません</b>(「元のKEY・カポに戻す」で戻ります)。曲そのものを移調するときは編集の画面の「移調 −1/＋1」です。' },
+  { k: ['pdf', '印刷', '共有', 'line', 'airdrop', '送'], q: 'PDFにして送るには?', a: '「👁 閲覧」にして、曲名の下の「<b>📄 PDF・共有</b>」を押します。印刷の画面が開くので、iPhone は右上の共有ボタンから LINE・AirDrop・ファイルへ、Mac は左下の「PDF」から保存できます。' },
+  { k: ['再生', '聴', '聞', '素材', '通し', 'マイク'], q: '閲覧の画面で録音を聴くには?', a: '曲全体の<b>通し録音</b>は、曲名の下の横長の「▶ 通し録音を聴く」。パートごとの<b>素材録音</b>は、パート名の横の<b>マイクの丸ボタン</b>で、いちばん新しいテイクが鳴ります(隣の「○本」でテイクの一覧)。' },
   { k: ['戻', '取り消', 'やり直', '間違'], q: '操作を取り消すには?', a: '上の「<b>↶</b>」で直前の操作を取り消し、「↷」でやり直せます(Mac は ⌘Z / ⇧⌘Z)。' },
   { k: ['保存', 'データ', '消える', 'どこ'], q: 'データはどこに保存される?', a: '曲と録音は<b>この端末のブラウザの中</b>に自動で保存されます。サーバーには送りません。端末を替える・消えると困るときに備えて、ときどき「バックアップ書き出し」をしてください。' },
   { k: ['スケール', 'ドリアン', 'モード', 'マイナー', 'メジャー'], q: 'スケールを選ぶとどうなる?', a: 'KEY の札の「スケール」で選ぶと、コード入力のディグリー・五度圏・提案・スケールのタブが、そのスケールのコードになります。「スケールそれぞれの感じ」で説明を読み、▶ で音階を聞き比べられます。' },
