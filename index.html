@@ -485,6 +485,8 @@ body:not(.viewing) .view-only { display: none !important; }
 .pills .dgl.fT { color: var(--fT); } .pills .dgl.fS { color: var(--fS); } .pills .dgl.fD { color: var(--fD); } .pills .dgl.fX { color: var(--sub); }
 .pills .pl > button.pfT { box-shadow: inset 4px 0 0 var(--fT); } .pills .pl > button.pfS { box-shadow: inset 4px 0 0 var(--fS); } .pills .pl > button.pfD { box-shadow: inset 4px 0 0 var(--fD); }
 .pk-legend { font-size: 12px; margin: 2px 0 6px; line-height: 1.6; }
+.sheet h4.pk-h { font-size: 14px; color: var(--ink); font-weight: 700; margin: 14px 0 2px; }
+.pk-desc { font-size: 12px; color: var(--sub); margin: 0 0 6px; line-height: 1.5; }
 .pills .cn2 { display: block; font-size: 12px; }
 .pills.plain button { color: var(--ink); font-weight: 400; }
 .grid7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
@@ -1034,12 +1036,12 @@ function suggestions(song, prev, show = (c) => c) {
   const add = (g, chord, label) => { if (!seen.has(g.title + chord)) { seen.add(g.title + chord); g.items.push({ chord, label }); } };
   // スケールを選んでいるときは、そのスケールのコードを先頭に出す(モードでは V→I の解決が弱いので、下の機能和声の提案は応用として残す)
   if (song.scale) {
-    const g0 = { title: `${SCALES[song.scale][0]}のコード(${SCALE_INFO[song.scale][0]})`, items: [] };
+    const g0 = { title: `${SCALES[song.scale][0]}のコード(${SCALE_INFO[song.scale][0]})`, desc: '選んだスケールの音だけでできるコード。曲の雰囲気から外れません。', items: [] };
     scaleBasics(song, ki, key).forEach((c) => add(g0, c, degreeOf(c, ki)));
     groups.push(g0);
   }
 
-  const g1 = { title: prev ? `「${show(prev)}」の次に来やすい` : '最初のコード向き', items: [] };
+  const g1 = { title: prev ? `「${show(prev)}」の次に来やすい` : '最初のコード向き', desc: prev ? '直前のコードから、よく使われる流れでつながるコード。迷ったらここから。' : '曲やパートの始まりによく使うコード。まずは緑(I など)で始めると落ち着きます。', items: [] };
   const pp = prev && parseChord(prev);
   if (pp && !pp.nc && isDom(pp.quality)) { // ドミナント7thは4度上へ解決しやすい
     const target = NOTE_PC[pp.root] + 5, iv = mod12(target - maj);
@@ -1054,24 +1056,24 @@ function suggestions(song, prev, show = (c) => c) {
   rows.forEach(([iv, q]) => { const c = mk(iv, q); add(g1, c, degreeOf(c, ki)); });
   groups.push(g1);
 
-  const g2 = { title: 'ドミナント系(記号つき)', items: [] };
+  const g2 = { title: '次のコードへ引っぱるコード', desc: '鳴らすと「次へ進みたい」感じが強いコード。「→IIm へ」なら、IIm の直前に置くと IIm へ自然につながります。', items: [] };
   const v7 = spellK(ki.tonic + 7) + '7';
-  add(g2, v7, 'V7 ドミナント');
+  add(g2, v7, 'V7 → I へ');
   const targets = ki.minor ? [[3, ''], [5, 'm'], [8, ''], [10, '']] : [[2, 'm'], [4, 'm'], [5, ''], [7, ''], [9, 'm']];
   targets.forEach(([iv, q]) => {
     const tgt = spellK(ki.tonic + iv) + q;
-    add(g2, spellK(ki.tonic + iv + 7) + '7', `V7/${degreeOf(tgt, ki)}`);
+    add(g2, spellK(ki.tonic + iv + 7) + '7', `→${degreeOf(tgt, ki)} へ`);
   });
-  add(g2, spellK(ki.tonic + 1) + '7', 'SubV7 裏コード');
-  add(g2, spellK(ki.tonic + 2) + (ki.minor ? 'm7(b5)' : 'm7'), 'IIm7 ツーファイブの頭');
+  add(g2, spellK(ki.tonic + 1) + '7', '裏コード → I へ');
+  add(g2, spellK(ki.tonic + 2) + (ki.minor ? 'm7(b5)' : 'm7'), 'IIm7 → V7 → I の頭');
   groups.push(g2);
 
-  const g3 = { title: '借用(同主調から)', items: [] };
+  const g3 = { title: ki.minor ? '明るい色を借りるコード' : '切ない色を借りるコード', desc: ki.minor ? '同じ主音のメジャーキーから借りたコード。KEYの外の音が1つ入り、ふっと明るくなります。' : '同じ主音のマイナーキーから借りたコード。KEYの外の音が1つ入り、ふっと切なく・ドラマチックになります。', items: [] };
   const borrow = ki.minor ? [[5, ''], [7, '7'], [0, '']] : [[10, ''], [8, ''], [5, 'm'], [3, ''], [2, 'm7(b5)']];
   borrow.forEach(([iv, q]) => { const c = spellK(ki.tonic + iv) + q; add(g3, c, degreeOf(c, ki)); });
   groups.push(g3);
 
-  const g4 = { title: '色づけ', items: [] };
+  const g4 = { title: 'おしゃれに響かせるコード', desc: '基本のコードに音を1つ足したもの。役割はそのままで、響きだけ柔らかく・おしゃれになります。', items: [] };
   const colors = ki.minor ? [[0, 'm7'], [0, 'madd9'], [7, '7sus4'], [8, 'M7']] : [[0, 'add9'], [0, 'M7'], [5, 'M7'], [7, '7sus4'], [9, 'm7'], [2, 'm7']];
   colors.forEach(([iv, q]) => { const c = spellK(ki.tonic + iv) + q; add(g4, c, degreeOf(c, ki)); });
   groups.push(g4);
@@ -2653,11 +2655,11 @@ function capoSuggestHTML(s, act = 'capo-sug') {
   return `<button class="capo-sug" data-act="${act}" data-v="${best.capo}" ${tip(`カポ0〜7を比べて、セーハや高いフレットがいちばん少ない位置です。押すとカポを変えます(鳴る音・KEYはそのまま。押さえ方だけ変わります)${act === 'pm-capo' ? '。演奏用の表示だけで、曲のデータは変わりません' : ''}。いま:${list(now)}`)}>💡 ${best.capo ? `カポ${best.capo}` : 'カポなし'}がいちばん楽<small>${list(best)}${best.hard ? ` ・ セーハなど ${best.hard}か所` : ''}</small></button>`;
 }
 // 候補のボタン:押すと決定。小さいTABつき、右のスピーカーで音だけ鳴らせる
-const pill = (chord, label, degFirst) => {
+const pill = (chord, label, degFirst, hint) => {
   const c = viewCtx(cur), shape = c.shift ? transposeChord(chord, c.shift, c.shapeStyle) : chord;
   const fn = c.ki ? funcOf(chord, c.ki) : ''; // トニック/サブドミナント/ドミナントの色分け(曲の画面のディグリーと同じ)
   const star = easyShape(shape) ? '<i class="easy">★</i>' : '';
-  const sub = [c.shift ? `実音 ${chord}` : '', degFirst ? '' : label].filter(Boolean).join(' ・ ');
+  const sub = [c.shift ? `実音 ${chord}` : '', degFirst ? '' : label, hint || ''].filter(Boolean).join(' ・ ');
   const head = degFirst ? `<span class="dgl ${fn ? 'f' + fn : ''}">${esc(label)}</span><span class="cn2">${esc(shape)}${star}</span>` : `${esc(shape)}${star}`;
   return `<span class="pl"><button data-pk="use" data-c="${esc(chord)}" class="${fn ? 'pf' + fn : ''}" ${fn ? `title="${FUNC_NAME[fn]}"` : ''}>${head}${sub ? `<small>${esc(sub)}</small>` : ''}${prefs.dgm !== false ? `<span class="mtab">${diagramSVG(shape, 0)}</span>` : ''}</button><button class="pl-play" data-pk="play" data-c="${esc(chord)}" aria-label="${esc(chord)}を鳴らす"><span class="snd-ico"></span></button></span>`;
 };
@@ -2665,15 +2667,24 @@ const pill = (chord, label, degFirst) => {
 function degreeRows(ki, key) {
   const sp = spellerFor(key), mk = (iv, q) => sp(ki.tonic + iv) + q;
   const main = ki.minor ? [[0, 'm'], [2, 'm7(b5)'], [3, ''], [5, 'm'], [7, 'm'], [8, ''], [10, '']] : [[0, ''], [2, 'm'], [4, 'm'], [5, ''], [7, ''], [9, 'm'], [11, 'm7(b5)']];
-  const extra = ki.minor ? [[7, ''], [7, '7'], [5, ''], [1, '']] : [[7, '7'], [10, ''], [8, ''], [5, 'm'], [2, ''], [4, ''], [0, '7']];
-  const row = (l) => l.map(([iv, q]) => { const ch = mk(iv, q); return pill(ch, degreeOf(ch, keyInfo(key)), true); }).join('');
+  // 応用は2種類:次のコードへ引っぱる(セカンダリードミナント)/別のキーから色を借りる(借用)。[度数, 種類, 添え書き]
+  const pull = ki.minor ? [[7, '', '→ Im へ'], [7, '7', '→ Im へ(強く)']] : [[7, '7', '→ I へ(強く)'], [2, '', '→ V へ'], [4, '', '→ VIm へ'], [0, '7', '→ IV へ']];
+  const borrow = ki.minor ? [[5, '', '明るい色'], [1, '', '切ない・劇的']] : [[10, '', '力強い'], [8, '', 'ドラマチック'], [5, 'm', '切ない']];
+  const H = (t, d) => `<h4 class="pk-h">${t}</h4><p class="pk-desc">${d}</p>`;
+  const extHTML = (skip) => {
+    const mkRow = (l) => l.map(([iv, q, h]) => [mk(iv, q), h]).filter(([c]) => !skip.has(c)).map(([c, h]) => pill(c, degreeOf(c, ki), true, h)).join('');
+    const a = mkRow(pull), b = mkRow(borrow);
+    return (a ? H('応用① 次のコードへ引っぱるコード', 'KEYの外の音を1つ入れて、「次へ進みたい」感じを強くしたもの。添え書きのコードの直前に置くと、そこへ自然につながります(赤の「ドミナント」が I へ戻りたがる力を、ほかのコードに向けたもの)。') + `<div class="pills">${a}</div>` : '')
+      + (b ? H(`応用② ${ki.minor ? 'メジャー' : 'マイナー'}キーから色を借りるコード`, `同じ主音の${ki.minor ? 'メジャー' : 'マイナー'}キーから借りたコード。KEYの外の音が1つ入り、雰囲気がふっと変わります。`) + `<div class="pills">${b}</div>` : '');
+  };
   if (cur.scale) { // 選んだスケールの音だけでできるコードを基本にする
-    const basics = scaleBasics(cur, ki, key), basePcs = new Set(basics.map((c) => c));
-    const ext = extra.map(([iv, q]) => mk(iv, q)).filter((c) => !basePcs.has(c));
-    return `<h4>この KEY・スケールの基本(${esc(SCALES[cur.scale][0])})</h4><div class="pills">${basics.map((ch) => pill(ch, degreeOf(ch, ki), true)).join('')}</div>
-      <h4>よく使う応用(ドミナント・借用)</h4><div class="pills">${ext.map((ch) => pill(ch, degreeOf(ch, ki), true)).join('')}</div>`;
+    const basics = scaleBasics(cur, ki, key);
+    return H(`基本 この KEY・スケールの音だけでできるコード(${esc(SCALES[cur.scale][0])})`, 'スケールの音だけでできるので、どれを使っても曲の雰囲気から外れません。色は役割です(緑=落ち着く・青=広がる・赤=戻りたくなる)。')
+      + `<div class="pills">${basics.map((ch) => pill(ch, degreeOf(ch, ki), true)).join('')}</div>` + extHTML(new Set(basics));
   }
-  return `<h4>このKEYの基本(ダイアトニック)</h4><div class="pills">${row(main)}</div><h4>よく使う応用(ドミナント・借用)</h4><div class="pills">${row(extra)}</div>`;
+  const row = (l) => l.map(([iv, q]) => { const ch = mk(iv, q); return pill(ch, degreeOf(ch, keyInfo(key)), true); }).join('');
+  return H('基本 このKEYの音だけでできる7つ(ダイアトニック)', 'KEYの7つの音だけでできるコード。どれを使ってもKEYから外れないので、まずはここから選べば安心です。色は役割です(緑=落ち着く・青=広がる・赤=戻りたくなる)。')
+    + `<div class="pills">${row(main)}</div>` + extHTML(new Set());
 }
 function renderPickLists() {
   // 入力中の候補
@@ -2686,8 +2697,8 @@ function renderPickLists() {
     $('pkSug').innerHTML = '<p class="muted">KEYを決めるか、コードを2つ以上置くと、記号つきの提案が出ます。</p>';
   } else {
     const vc = viewCtx(cur), shNote = [cur.capo ? `カポ${cur.capo}` : '', tuningLabel(cur.tuning)].filter(Boolean).join('+');
-    $('pkSug').innerHTML = `<p class="muted" style="margin:0">KEY ${esc(sg.key)}${cur.key ? '' : '(推定)'}${cur.scale ? `・${esc(SCALES[cur.scale][0])}` : ''}を基準にしています${vc.shift ? `。${esc(shNote)}で押さえる形(押さえ方では KEY ${esc(transposeKey(sg.key, vc.shift))})で並べ、★は開放弦で押さえやすい形です` : '。★は開放弦で押さえやすい形です'}${pick.prev ? `。直前のコード:${esc(toInput(pick.prev))}` : ''}</p>`
-      + `<p class="pk-legend">${funcLegendHTML(keyInfo(sg.key))}</p>` + sg.groups.filter((g) => g.items.length).map((g) => `<h4>${esc(g.title)}</h4><div class="pills">${g.items.map((x) => pill(x.chord, x.label)).join('')}</div>`).join('');
+    $('pkSug').innerHTML = `<p class="pk-desc" style="font-size:13px;color:var(--ink)">いまの KEY でよく使うコードを、<b>使いどころ別</b>に並べています。まとまりの下の一言が、そのコードの使いどころです。</p><p class="muted" style="margin:0">KEY ${esc(sg.key)}${cur.key ? '' : '(推定)'}${cur.scale ? `・${esc(SCALES[cur.scale][0])}` : ''}を基準にしています${vc.shift ? `。${esc(shNote)}で押さえる形(押さえ方では KEY ${esc(transposeKey(sg.key, vc.shift))})で並べ、★は開放弦で押さえやすい形です` : '。★は開放弦で押さえやすい形です'}${pick.prev ? `。直前のコード:${esc(toInput(pick.prev))}` : ''}</p>`
+      + `<p class="pk-legend">${funcLegendHTML(keyInfo(sg.key))}</p>` + sg.groups.filter((g) => g.items.length).map((g) => `<h4 class="pk-h">${esc(g.title)}</h4>${g.desc ? `<p class="pk-desc">${esc(g.desc)}</p>` : ''}<div class="pills">${g.items.map((x) => pill(x.chord, x.label)).join('')}</div>`).join('');
   }
   // スケールのコード
   const key = effKey(cur), ki = keyInfo(key);
@@ -4712,7 +4723,7 @@ const TUTORIAL = [
   ['② 曲の構成', '<p>前奏・Aメロ・サビなどの<b>パート</b>を並べて曲を作ります。</p><ul><li>いちばん下の「＋ サビ」などで追加</li><li><b>並べ替え</b>:上の「構成」の一覧で、パートの「≡」をつまんで動かします(PCはどこをつかんでもOK)。一覧のパートを押すとそこへ移動。各パートの▲▼でも動かせます</li><li>「複製」で2番のサビなどに使い回し、「×」の数字で繰り返し回数</li><li>削除しても ↶ で戻せます</li></ul>'],
   ['③ 歌詞とコード', '<p>歌詞のセクションは2段階です。</p><ol><li>「歌詞を書く」で歌詞を入れる</li><li>「コードを置く」に切り替えて、<b>コードを乗せたい文字をタップ</b></li></ol><p>あとで歌詞を直しても、コードは乗っていた文字についていきます。</p>'],
   ['④ 演奏のみのパート', '<p>前奏・間奏・後奏のような歌詞のない部分は「<b>演奏のみ</b>」にして、<b>| C | G | Am | F |</b> のマス目で書きます。</p><ul><li>マスをタップしてコードを選ぶ</li><li>「÷」で1小節にコードを2〜4個入れられます。間違えたら ↶</li></ul>'],
-  ['⑤ コードの選び方', '<p>コード名を<b>直接打つ</b>(am7 → Am7 のように表記を揃えます)か、下のタブから選びます。</p><ul><li><b>使ったコード</b>・<b>ディグリー</b>(I・IV・V など)・<b>五度圏</b>・<b>提案</b>(次に来やすい・ドミナント系・借用・色づけ)・<b>スケール</b>・<b>指板から</b>(押さえた形から名前を探す)・<b>組み立て・分数コード</b></li><li>候補の左の色:<span class="fT">緑=トニック</span>・<span class="fS">青=サブドミナント</span>・<span class="fD">赤=ドミナント</span>。★は開放弦で押さえやすい形</li><li>候補の右の <span class="snd-ico"></span> で音だけ聞けます。スケールを選んでいると、ディグリー・五度圏・提案もそのスケールのコードになります</li></ul>'],
+  ['⑤ コードの選び方', '<p>コード名を<b>直接打つ</b>(am7 → Am7 のように表記を揃えます)か、下のタブから選びます。</p><ul><li><b>使ったコード</b>・<b>ディグリー</b>(I・IV・V など)・<b>五度圏</b>・<b>提案</b>(次に来やすい・次へ引っぱる・色を借りる・おしゃれに響かせる。まとまりごとに一言の説明つき)・<b>スケール</b>・<b>指板から</b>(押さえた形から名前を探す)・<b>組み立て・分数コード</b></li><li>候補の左の色:<span class="fT">緑=トニック</span>・<span class="fS">青=サブドミナント</span>・<span class="fD">赤=ドミナント</span>。★は開放弦で押さえやすい形</li><li>候補の右の <span class="snd-ico"></span> で音だけ聞けます。スケールを選んでいると、ディグリー・五度圏・提案もそのスケールのコードになります</li></ul>'],
   ['⑥ 表示の切り替え', '<p>構成の上の「<b>コードの表示方法</b>」で見え方を変えられます(見出しの左の「く」でたためます)。</p><ul><li><b>カポに合わせる/実音/両方</b>:カポ・半音下げのときに出ます</li><li><b>TAB表示</b>:コードの下に押さえ方。<span class="snd-ico"></span> を押すと音が鳴ります</li><li><b>ディグリー</b>:度数(V7 など)と、トニック/サブドミナント/ドミナントの色分け</li><li><b>ベース欄 ON/OFF</b>:ベースが弾く音。違う音にしたい所はコードの画面で手直し</li><li><b>移調</b>:曲全体を半音ずつ上げ下げ。右の「💡」が、いちばん押さえやすいカポを教えてくれます(押すとそのカポに変わります)</li></ul>'],
   ['⑦ パートごとの録音(素材用)', '<p>各パートの <b>「● 録音」</b> を押すと、そのパートだけの録音画面が開きます。フレーズの試し録りなど素材用です。</p><ul><li>「● 録音開始」→ カウントイン(なし・1・2・4小節から選べます)のあと録音 →「■ 停止して保存」</li><li>録音開始の横の「録音中のクリック ON」で、録りながらクリックを聞けます(イヤホンで)</li><li>テイクは何本でも残せて、その場で聞き比べ・書き出しができます</li><li>録音は https のページで使えます(GitHub Pages に置いた版)</li></ul>'],
   ['⑧ 通し録音(記録用)', '<p>曲の画面の「<b>🎚 通し録音</b>」で、曲をはじめから通して録ります(各パートの「● 録音」は素材用)。</p><ul><li>上の「<b>● 録音 | ✎ 編集</b>」で画面を切り替えます</li><li><b>録音</b>:トラックの「○」で録音先を選び「● 録音」。ほかのトラックを聞きながら重ねて録れます(イヤホンで)</li><li><b>編集</b>:トラックごとに「● 基本」のテイクを1つ選びます。「範囲で使う」にしてほかのテイクをなぞると、その範囲だけ差し替わります。つなぎ方はトラックの「⋯」→「つなぎ方を保存する」で残して聞き比べられます</li><li>帯は移動・両端のつまみで切り詰め(音の位置はそのまま)。<b>スマホは帯を長押ししてからつかむ</b>(なぞるだけならスクロール)。グリッドは小節〜16分・自由から。帯を押すと数値と0.01秒の微調整も</li><li>トラック名の左の「♪」で楽器の記号、右の「📌」で上にピン留め。「横の幅」「全体」「縦の幅」で見やすく</li><li>M(ミュート)・S(ソロ)・音量、「1本の音声に書き出し(WAV)」、録音の遅れ補正もここ</li></ul>'],
