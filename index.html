@@ -430,6 +430,11 @@ body:not(.viewing) .view-only { display: none !important; }
 .playing .lyr .ln { margin-bottom: 4px; }
 .playing .struct { display: none !important; } /* 演奏用モードでは構成の行を出さない */
 .pm-barsnote { display: none; }
+.transport button { white-space: nowrap; }
+@media (max-width: 420px) { .transport .tempo-st .tval { padding: 0 4px; } }
+.stepper .tval { padding: 0 8px; font-variant-numeric: tabular-nums; white-space: nowrap; align-self: center; }
+.clip .cn .str { margin-left: 4px; font-size: 10px; padding: 0 3px; border-radius: 3px; background: rgba(0,0,0,.18); }
+.clip .cn .str.bad { background: var(--rec); color: #fff; }
 .pm-nochords #secs .bars, .pm-nochords #secs .lyr .ch, .pm-nochords .dispbar, .pm-nochords .legend { display: none !important; } /* コードを隠すときは表示の設定・ディグリーの説明も隠す */
 .pm-nochords #secs .pm-barsnote { display: block; color: var(--sub); font-size: 14px; padding: 2px 0 6px; }
 .pm-nochords #secs .lyr .ln { margin-bottom: 2px; }
@@ -1147,6 +1152,7 @@ function normalizeFull(f) {
         fadeIn: num(k.fadeIn, 0, 600, 0), fadeOut: num(k.fadeOut, 0, 600, 0), dur: num(k.dur, 0, 36000, 0),
         ...(k.info ? { info: String(k.info).slice(0, 80) } : {}), // 録れた条件(読み込み直しても残す)
         ...(Number(k.gain) > 1 ? { gain: num(k.gain, 1, 16, 1) } : {}), // 音量をそろえた倍率
+        ...(Math.abs(Number(k.stretch) - 1) > 0.0005 ? { stretch: num(k.stretch, 0.25, 4, 1) } : {}), // テンポに合わせた伸び縮み(鳴る長さ/録った長さ)
       })) : [];
       return {
         id: String(t.id || uid()), name: String(t.name || `トラック${i + 1}`), vol: num(t.vol, 0, 1.5, 1),
@@ -2371,7 +2377,9 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'tempo': {
+      const before = cur.tempo;
       cur.tempo = clampInt(cur.tempo + Number(el.dataset.d), 20, 400, 120);
+      tempoChanged(before);
       const inp = document.querySelector('[data-f="tempo"]'); if (inp) inp.value = cur.tempo;
       updateSummary(); touch('tempo-btn');
       break;
@@ -2491,7 +2499,7 @@ document.addEventListener('input', (ev) => {
   const group = 'in' + (el.dataset.fg || '') + (el.dataset.f || el.dataset.sf || 'ly');
   if (el.dataset.f) {
     const f = el.dataset.f;
-    if (f === 'tempo') { if (el.value === '') return; cur.tempo = clampInt(el.value, 20, 400, cur.tempo); }
+    if (f === 'tempo') { if (el.value === '') return; const before = cur.tempo; cur.tempo = clampInt(el.value, 20, 400, cur.tempo); if (tempoAsk.base === null) tempoAsk.base = before; clearTimeout(tempoAsk.timer); } // 打っている途中(1→11→110)では聞かず、打ち終えたとき(change)に聞く
     else if (f === 'capo' || f === 'tuning' || f === 'key' || f === 'scale' || f === 'timeSig') return; // change で処理
     else cur[f] = el.value;
     updateSummary(); touch(group);
@@ -2511,7 +2519,7 @@ document.addEventListener('change', (ev) => {
   if (el.id === 'importFile') { importBackup(el.files[0]); el.value = ''; return; }
   if (!cur || !$('app').contains(el)) return;
   const f = el.dataset.f;
-  if (f === 'tempo') { el.value = cur.tempo; return; }
+  if (f === 'tempo') { el.value = cur.tempo; if (tempoAsk.base !== null) tempoChanged(tempoAsk.base); return; }
   if (f === 'capo' || f === 'tuning') {
     cur[f] = Number(el.value); touch();
     // カポをつけたら、コードはカポに合わせた形(押さえ方)で出す
@@ -3126,7 +3134,8 @@ function tapTempo() {
   const iv = [];
   for (let i = 1; i < taps.length; i++) iv.push(taps[i] - taps[i - 1]);
   const bpm = clampInt(Math.round(60000 / (iv.reduce((a, b) => a + b, 0) / iv.length)), 20, 400, cur.tempo);
-  cur.tempo = bpm;
+  const before = cur.tempo;
+  cur.tempo = bpm; tempoChanged(before);
   const inp = document.querySelector('[data-f="tempo"]'); if (inp) inp.value = bpm;
   updateSummary(); touch('tap');
   showToast(`テンポ ${bpm}${taps.length < 4 ? '(あと数回叩くと正確に)' : ''}`);
@@ -3258,7 +3267,7 @@ function renderRec() {
       <button data-rk="click" class="${prefs.recClick ? 'on' : ''}" ${st !== 'idle' ? 'disabled' : ''} ${tip('録音しているあいだもクリック(メトロノーム)を鳴らし続けます。イヤホンで聞いてください')}>録音中のクリック ${prefs.recClick ? 'ON' : 'OFF'}</button>
       <button data-rk="metset" ${tip('クリックの音色・拍の頭の音・強弱・刻みを変えます')}>⚙ クリックの設定</button>
     </div>
-    <p class="muted">♩=${cur.tempo}・${esc(cur.timeSig)}。${prefs.recClick ? '<b>🎧 イヤホン推奨:</b>スピーカーで鳴らすとクリックも一緒に録音されます。' : ''}</p>
+    <p class="muted"><span class="seg stepper"><button data-rk="tempo" data-d="-1" ${st !== 'idle' ? 'disabled' : ''} aria-label="テンポを1下げる">−</button><span class="tval">♩=${cur.tempo}</span><button data-rk="tempo" data-d="1" ${st !== 'idle' ? 'disabled' : ''} aria-label="テンポを1上げる">＋</button></span> ・${esc(cur.timeSig)}。${prefs.recClick ? '<b>🎧 イヤホン推奨:</b>スピーカーで鳴らすとクリックも一緒に録音されます。' : ''}</p>
     <p class="muted">はじめての録音ではマイクの使用を許可する画面が出ます。録音はこの端末の中だけに保存され、バックアップには入りません(必要なテイクは「書き出し」で保存してください)。</p>`
     : `<p class="err">この画面では録音できません。録音は https のページ(GitHub Pages に置いた版)か、Safari・Chrome で開いたときに使えます。</p>`}
     <h3>テイク(${rec.takes.length})</h3>
@@ -3367,6 +3376,7 @@ $('recSheet').addEventListener('click', async (ev) => {
   else if (k === 'metset') openMet();
   else if (k === 'stop') stopRecording();
   else if (k === 'close') closeRec();
+  else if (k === 'tempo') { const before = cur.tempo; cur.tempo = clampInt(cur.tempo + Number(b.dataset.d), 20, 400, 120); touch('tempo-btn'); tempoChanged(before); renderRec(); }
   else if (k === 'dl') {
     const t = rec.takes[Number(b.dataset.i)];
     saveFile(t.blob, `${cur.title || '無題の曲'}_${t.name}.${extOf(t.mime)}`);
@@ -3389,7 +3399,7 @@ let fullView = false;
 const fx = {
   sel: null, pps: 60, tool: 'edit', alt: false, pos: 0, playing: false, startCtx: 0, startPos: 0, sources: [], raf: 0,
   recState: 'idle', recTrack: '', mr: null, stream: null, chunks: [], recStartCtx: 0, tPlay: 0, mix: null,
-  bufs: new Map(), peaks: new Map(), missing: new Set(), loading: false,
+  bufs: new Map(), raw: new Map(), str: new Map(), peaks: new Map(), missing: new Set(), loading: false,
 };
 const ensureFull = (s) => {
   if (!s.full || !Array.isArray(s.full.tracks)) s.full = { tracks: [], markers: [] };
@@ -3460,29 +3470,108 @@ function makePeaks(buf) { // 1秒あたり200点の最大振幅(波形の表示�
 }
 // 同時に何度呼ばれても、読み込みは1回だけ走らせる
 function loadFullBuffers() {
-  if (!fx.loadP) fx.loadP = loadFullBuffers1().finally(() => { fx.loadP = null; });
+  if (!fx.loadP) fx.loadP = loadFullBuffers1().then(applyStretch).finally(() => { fx.loadP = null; });
   return fx.loadP;
 }
 async function loadFullBuffers1() {
   const ids = [];
-  for (const t of ensureFull(cur).tracks) for (const k of t.takes) if (!fx.bufs.has(k.id) && !fx.missing.has(k.id)) ids.push(k.id);
+  for (const t of ensureFull(cur).tracks) for (const k of t.takes) if (!fx.raw.has(k.id) && !fx.missing.has(k.id)) ids.push(k.id);
   if (!ids.length || !storageOk) return false;
   fx.loading = true;
   for (const id of ids) {
     try {
       const r = await recGet(id);
       if (!r || !r.blob) { fx.missing.add(id); continue; }
-      const buf = await decodeBlob(r.blob);
-      fx.bufs.set(id, buf); fx.peaks.set(id, makePeaks(buf));
+      setRaw(id, await decodeBlob(r.blob));
     } catch (e) { console.error(e); fx.missing.add(id); }
   }
   fx.loading = false;
   return true;
 }
+// 元の録音を覚える。伸縮していないテイクはそのまま鳴らす
+function setRaw(id, buf) { fx.raw.set(id, buf); fx.bufs.set(id, buf); fx.str.set(id, 1); fx.peaks.set(id, makePeaks(buf)); }
+function forgetBuf(id) { fx.raw.delete(id); fx.bufs.delete(id); fx.str.delete(id); fx.peaks.delete(id); }
+const stretchOf = (k) => k.stretch || 1;
+const stretchPending = () => ensureFull(cur).tracks.some((t) => t.takes.some((k) => fx.raw.has(k.id) && Math.abs((fx.str.get(k.id) || 1) - stretchOf(k)) > 1e-4));
+// テイクの伸縮率が変わっていたら、元の録音から作り直す(元の録音は消さないので、テンポを戻せば元の音に戻る)
+async function applyStretch() {
+  for (const t of ensureFull(cur).tracks) for (const k of t.takes) {
+    const raw = fx.raw.get(k.id), r = stretchOf(k);
+    if (!raw || Math.abs((fx.str.get(k.id) || 1) - r) < 1e-4) continue;
+    await new Promise((res) => setTimeout(res, 0)); // 画面を止めすぎないよう、1本ごとに一息つく
+    const buf = Math.abs(r - 1) < 1e-4 ? raw : timeStretch(raw, r);
+    fx.bufs.set(k.id, buf); fx.str.set(k.id, r); fx.peaks.set(k.id, makePeaks(buf));
+  }
+}
+// 音の高さを変えずに長さだけ変える(WSOLA)。r = 鳴らす長さ / 元の長さ。素材の確認用の簡易な方式で、±15%を超えると音が荒れやすい
+function timeStretch(buf, r) {
+  const sr = buf.sampleRate, nch = buf.numberOfChannels, len = buf.length;
+  const N = 2 * Math.round(sr * 0.023), Ha = N / 2, Hs = Ha / r, tol = Math.round(sr * 0.008), L = N - Ha;
+  const outLen = Math.max(1, Math.round(len * r));
+  const src = Array.from({ length: nch }, (_, c) => buf.getChannelData(c));
+  const mono = new Float32Array(len);
+  for (let c = 0; c < nch; c++) for (let i = 0; i < len; i++) mono[i] += src[c][i] / nch;
+  const win = new Float32Array(N); for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N);
+  const out = Array.from({ length: nch }, () => new Float32Array(outLen + N)), norm = new Float32Array(outLen + N);
+  let prev = -1;
+  for (let k = 0; k * Ha < outLen; k++) {
+    const nominal = Math.round(k * Hs);
+    let best = Math.min(Math.max(0, nominal), Math.max(0, len - N));
+    const target = prev + Ha; // 前の窓を自然に続けた位置。そこに一番よく似た所を、予定の位置の前後から探す
+    if (prev >= 0 && target + L <= len) {
+      let bc = -Infinity;
+      for (let d = -tol; d <= tol; d += 3) {
+        const q = nominal + d; if (q < 0 || q + N > len) continue;
+        let c = 0; for (let i = 0; i < L; i += 8) c += mono[q + i] * mono[target + i];
+        if (c > bc) { bc = c; best = q; }
+      }
+    }
+    const o = k * Ha;
+    for (let c = 0; c < nch; c++) { const sc = src[c], oc = out[c]; for (let i = 0; i < N && best + i < len; i++) oc[o + i] += sc[best + i] * win[i]; }
+    for (let i = 0; i < N; i++) norm[o + i] += win[i];
+    prev = best;
+  }
+  const res = fullCtx().createBuffer(nch, outLen, sr);
+  for (let c = 0; c < nch; c++) { const oc = out[c], d = res.getChannelData(c); for (let i = 0; i < outLen; i++) d[i] = oc[i] / Math.max(norm[i], 0.5); }
+  return res;
+}
+// テンポを変えたら、通し録音のテイクを合わせるかをたずねる。±を続けて押す間は待ち、止まってから1回だけ聞く
+const tempoAsk = { base: null, timer: 0 };
+function tempoChanged(before) {
+  if (!cur || !ensureFull(cur).tracks.some((t) => t.takes.length)) { tempoAsk.base = null; return; }
+  if (tempoAsk.base === null) tempoAsk.base = before;
+  clearTimeout(tempoAsk.timer);
+  tempoAsk.timer = setTimeout(askTempoFit, 1200);
+}
+async function askTempoFit() {
+  const from = tempoAsk.base, to = cur && cur.tempo; tempoAsk.base = null;
+  if (!cur || !from || from === to) return;
+  const takes = ensureFull(cur).tracks.flatMap((t) => t.takes), r = from / to;
+  const after = takes.map((k) => stretchOf(k) * r), worst = Math.max(...after.map((x) => Math.abs(x - 1)));
+  const ch = Math.round((to / from - 1) * 100);
+  const v = await dialog(`<h2>録音済みもこのテンポに合わせますか?</h2>
+    <p>♩=${from} → <b>♩=${to}</b>(${ch > 0 ? `${ch}% 速く` : `${-ch}% 遅く`})</p>
+    <p class="muted">通し録音のテイク ${takes.length}本を、音の高さはそのままで、テンポに合わせて伸び縮みさせます。小節の目盛りとそろったままになります。元の録音は消えません(テンポを戻して合わせれば元の音に戻ります)。</p>
+    ${worst > 0.15 + 1e-6 ? `<p class="err">録った時のテンポから ${Math.round(worst * 100)}% 変わるので、音質が落ちます(確認用と考えてください)。±15%までなら自然に聞こえます。</p>` : ''}
+    <p class="muted">「そのまま」にすると録音は元の速さで鳴り、小節の目盛りとはずれます。</p>`,
+  [{ label: 'そのまま', value: '' }, { label: '合わせる', value: 'fit', cls: 'primary' }]);
+  if (v !== 'fit') return;
+  for (const k of takes) {
+    for (const f of ['offset', 'length', 'trimStart', 'fadeIn', 'fadeOut']) k[f] = k[f] * r;
+    const st = stretchOf(k) * r;
+    if (Math.abs(st - 1) < 0.002) delete k.stretch; else k.stretch = Math.round(st * 10000) / 10000;
+  }
+  fx.pos *= r;
+  touch();
+  showToast('録音をテンポに合わせています…');
+  await loadFullBuffers();
+  if (fullView) renderFull(); else if (cur) renderEditor();
+  flash(`通し録音のテイクを ♩=${to} に合わせました`);
+}
 async function openFull() {
   stopViewPlay(); pmExit();
   fx.sel = null; fx.pos = 0; fx.recTrack = '';
-  fx.bufs.clear(); fx.peaks.clear(); fx.missing.clear();
+  fx.bufs.clear(); fx.raw.clear(); fx.str.clear(); fx.peaks.clear(); fx.missing.clear();
   renderFull();
   detectMics(() => { if (fullView) renderFull(); });
   await loadFullBuffers();
@@ -3546,6 +3635,7 @@ const laneSize = () => (LANE_H[prefs.laneH] ? prefs.laneH : 'M');
 // 通し録音の画面は「録音」と「編集」を切り替える(スマホで1画面に詰め込むと操作しづらかったため)
 const fullMode = () => (prefs.fullMode === 'edit' ? 'edit' : 'rec');
 function renderFull() {
+  if (!fx.loadP && stretchPending()) loadFullBuffers().then(() => { if (fullView) renderFull(); });
   const s = cur, F = ensureFull(s), mode = fullMode(), editing = mode === 'edit';
   const oldTl = $('tl'), keepX = oldTl ? oldTl.scrollLeft : 0, keepY = oldTl ? oldTl.scrollTop : 0; // 描き直しても表示位置を保つ
   document.body.classList.remove('viewing');
@@ -3573,7 +3663,7 @@ function renderFull() {
         <div class="clip ${used.length ? 'act' : ''} ${sel ? 'sel' : ''} ${miss ? 'miss' : ''}" data-fa="clip" data-tr="${t.id}" data-tk="${k.id}" style="left:${k.offset * pps}px;width:${Math.max(4, k.length * pps)}px">
           ${usedHTML}<canvas height="${LANE_H[laneSize()] - 2}"></canvas>
           <span class="fi" style="width:${Math.min(k.fadeIn, k.length) * pps}px"></span><span class="fo" style="width:${Math.min(k.fadeOut, k.length) * pps}px"></span>
-          <span class="cn">${esc(k.name)}${miss ? '(音声なし:録音した端末から「録音も入れる」で書き出して取り込むと鳴ります)' : load ? '(読み込み中)' : ''}</span>
+          <span class="cn">${esc(k.name)}${k.stretch ? `<small class="str ${Math.abs(k.stretch - 1) > 0.15 ? 'bad' : ''}" title="テンポに合わせて伸び縮みさせています(元の録音はそのまま)">${k.stretch > 1 ? '↔' : '→←'}${Math.round(Math.abs(1 / k.stretch - 1) * 100)}%</small>` : ''}${miss ? '(音声なし:録音した端末から「録音も入れる」で書き出して取り込むと鳴ります)' : load ? '(読み込み中)' : ''}</span>
           <span class="eh l" data-edge="l"></span><span class="eh r" data-edge="r"></span>
         </div></div>`;
     }).join('');
@@ -3624,6 +3714,7 @@ function renderFull() {
         ${editing ? '' : st === 'idle' ? `<button class="rec-go" data-fa="rec" ${supported ? '' : 'disabled'} ${tip('再生位置から録音します。ほかのトラックを聞きながら重ねて録れます(イヤホンで)')}><span class="rdot">●</span> 録音</button>`
           : `<button class="rec-go stop" data-fa="stop">${st === 'count' ? '■ やめる' : st === 'wait' ? '■ やめる' : '■ 停止して保存'}</button>`}
         <span class="pos" id="fxPos">${fmtPos(fx.pos)}<small>${barBeat(fx.pos)}${partAt(fx.pos) ? ' ・ ' + esc(partAt(fx.pos)) : ''}</small></span>
+        <span class="seg stepper tempo-st" ${tip('曲のテンポ。変えると、録音済みのテイクもこのテンポに合わせるかをたずねます')}><button data-fa="tempo" data-d="-1" ${busy ? 'disabled' : ''} aria-label="テンポを1下げる">−</button><span class="tval">♩=${s.tempo}</span><button data-fa="tempo" data-d="1" ${busy ? 'disabled' : ''} aria-label="テンポを1上げる">＋</button></span>
         <span class="rec-state">${st === 'count' ? 'カウントイン中…' : st === 'rec' ? '● 録音中' : st === 'wait' ? 'マイクの準備中…' : st === 'saving' ? '保存中…' : ''}</span>
       </div>
       <button class="foldh" data-fa="fold" aria-expanded="${!isFolded()}" ${tip('カウントイン・グリッド・表示の幅などの設定をたたんで、画面を広く使います。再生・録音の行は残ります')}><span class="chev ${isFolded() ? '' : 'open'}"></span>${editing ? '編集・表示の設定' : '録音・表示の設定'}</button>
@@ -4059,7 +4150,7 @@ async function finishFullTake(trackId, mime) {
     try { await recPut({ id: take.id, songId: cur.id, secId: FULL_SEC, trackId, name: take.name, blob, mime, dur, createdAt: Date.now() }); }
     catch (e) { console.error(e); showToast('⚠ 録音を保存できませんでした'); }
   }
-  fx.bufs.set(take.id, buf); fx.peaks.set(take.id, makePeaks(buf));
+  setRaw(take.id, buf);
   tr.takes.push(take); tr.active = take.id;
   fx.sel = { tr: tr.id, tk: take.id }; fx.pos = fx.startPos;
   touch(); renderFull();
@@ -4135,7 +4226,7 @@ function gridUnit() {
 }
 const snapT = (t) => { const u = gridUnit(); return u && !fx.alt ? Math.round(t / u) * u : t; };
 function clampTake(k) {
-  const dur = (fx.bufs.get(k.id) || {}).duration || k.dur || k.trimStart + k.length;
+  const dur = (fx.bufs.get(k.id) || {}).duration || (k.dur ? k.dur * stretchOf(k) : 0) || k.trimStart + k.length;
   k.trimStart = Math.min(Math.max(0, k.trimStart), Math.max(0, dur - 0.05));
   k.length = Math.min(Math.max(0.05, k.length), dur - k.trimStart);
   k.offset = Math.max(0, k.offset);
@@ -4197,6 +4288,7 @@ document.addEventListener('click', async (ev) => {
     }
     case 'micprobe': if (await probeMics()) { renderFull(); const a = autoMic(); showToast(a ? `「${a.label}」を使います` : 'マイクの一覧を読み込みました'); } break;
     case 'autonorm': prefs.autoNorm = !autoNorm(); savePrefs(); renderFull(); break;
+    case 'tempo': { const before = cur.tempo; cur.tempo = clampInt(cur.tempo + Number(b.dataset.d), 20, 400, 120); touch('tempo-btn'); tempoChanged(before); renderFull(); break; }
     case 'mode': prefs.fullMode = b.dataset.v; savePrefs(); hideTip(); if (b.dataset.v === 'rec') fx.sel = null; renderFull(); break;
     case 'toedit': {
       prefs.fullMode = 'edit'; savePrefs(); hideTip();
@@ -4250,7 +4342,7 @@ document.addEventListener('click', async (ev) => {
     case 'deltrack': {
       const t = F.tracks.find((x) => x.id === b.dataset.tr);
       if (t.takes.length && !(await askConfirm(`「${t.name}」と、そのテイク${t.takes.length}本の録音を削除します。録音は元に戻せません。`, '削除する'))) return;
-      for (const k of t.takes) { try { await recDel(k.id); } catch (e) { console.error(e); } fx.bufs.delete(k.id); }
+      for (const k of t.takes) { try { await recDel(k.id); } catch (e) { console.error(e); } forgetBuf(k.id); }
       F.tracks = F.tracks.filter((x) => x !== t);
       if (fx.sel && fx.sel.tr === t.id) fx.sel = null;
       touch(); renderFull();
@@ -4276,7 +4368,7 @@ document.addEventListener('click', async (ev) => {
       const { tr, tk } = findTake(fx.sel.tr, fx.sel.tk);
       if (!(await askConfirm(`「${tk.name}」を削除します。録音は元に戻せません。`, '削除する'))) return;
       try { await recDel(tk.id); } catch (e) { console.error(e); }
-      fx.bufs.delete(tk.id);
+      forgetBuf(tk.id);
       tr.takes = tr.takes.filter((x) => x !== tk);
       tr.comp = (tr.comp || []).filter((c) => c.tk !== tk.id);
       if (tr.active === tk.id) tr.active = (tr.takes[tr.takes.length - 1] || {}).id || '';
@@ -4686,6 +4778,7 @@ const FAQ = [
   { k: ['閲覧', '見る', '譜面'], q: '譜面だけを見るには?', a: '右上の切り替えで「<b>👁 閲覧</b>」にすると、編集用のボタンを隠して譜面だけにできます。曲名の下に「▶ 通し録音を聴く」(通し録音があるとき)と「📄 PDF・共有」が出ます。' },
   { k: ['演奏', 'ライブ', 'スクロール', '自動', '弾き'], q: '演奏しながら見るには?', a: '右上の切り替えで「<b>🎸 演奏</b>」にします。文字とコードが大きくなり(「表示の大きさ −/＋」で30〜220%。小さくすると曲全体を見渡せます)、「▶ 自動スクロール」でテンポとコードの長さに合わせて譜面が進みます(速さは −/＋ で20〜300%。動いている最中に変えてもすぐ効きます)。「コード表示 ON/OFF」で歌詞だけにもできます。演奏用モードではTABを押してもコードの音は鳴らず、構成の行も出しません。譜面に触れると止まり、指で位置を合わせてからもう一度押すと続きから進みます。演奏中は画面が暗くなりません。' },
   { k: ['移調', 'キー', 'key', 'カポ', '演奏'], q: '演奏するときだけKEYやカポを変えるには?', a: '「🎸 演奏」の画面の <b>KEY −/＋</b> でその場で移調して表示し、「💡 カポ○がいちばん楽」で押さえやすいカポの形にできます。どちらも<b>曲のデータは変わりません</b>(「元のKEY・カポに戻す」で戻ります)。曲そのものを移調するときは編集の画面の「移調 −1/＋1」です。' },
+  { k: ['テンポ', '速', '遅', 'bpm', '伸', '縮'], q: '録音したあとでテンポを変えるには?', a: '通し録音の画面(再生の行)・パートの録音の画面・曲名の下の「♩」の札で <b>−/＋</b> を押します。通し録音のテイクがあると「録音済みもこのテンポに合わせますか?」と聞くので、「<b>合わせる</b>」なら音の高さはそのままでテイクが伸び縮みし、小節とそろったままになります。元の録音は消えず、テンポを戻して合わせれば元の音に戻ります。±15%を超えると音質が落ちます(確認用)。パートごとの素材録音は録ったときのままです。' },
   { k: ['pdf', '印刷', '共有', 'line', 'airdrop', '送'], q: 'PDFにして送るには?', a: '「👁 閲覧」にして、曲名の下の「<b>📄 PDF・共有</b>」を押します。印刷の画面が開くので、iPhone は右上の共有ボタンから LINE・AirDrop・ファイルへ、Mac は左下の「PDF」から保存できます。' },
   { k: ['再生', '聴', '聞', '素材', '通し', 'マイク'], q: '閲覧の画面で録音を聴くには?', a: '曲全体の<b>通し録音</b>は、曲名の下の横長の「▶ 通し録音を聴く」。パートごとの<b>素材録音</b>は、パート名の横の<b>マイクの丸ボタン</b>で、いちばん新しいテイクが鳴ります(隣の「○本」でテイクの一覧)。' },
   { k: ['戻', '取り消', 'やり直', '間違'], q: '操作を取り消すには?', a: '上の「<b>↶</b>」で直前の操作を取り消し、「↷」でやり直せます(Mac は ⌘Z / ⇧⌘Z)。' },
