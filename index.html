@@ -110,6 +110,13 @@ input, select, textarea {
 .list-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
 .backup-note { font-size: 13px; color: var(--sub); margin: 0 0 16px; }
 .backup-note.warn { color: var(--danger); }
+.whatsnew-l { margin: -8px 0 14px; }
+.whatsnew-l button { font-size: 13px; padding: 4px 10px; }
+.whatsnew-l small { margin-left: 6px; color: var(--sub); }
+.cl-list { max-height: 55vh; overflow-y: auto; }
+.cl-e { margin: 0 0 10px; }
+.cl-d { font-weight: 700; font-size: 13px; color: var(--accent); }
+.cl-e ul { margin: 4px 0 0; padding-left: 1.2em; font-size: 14px; line-height: 1.55; }
 .song-card {
   display: block; width: 100%; text-align: left;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
@@ -775,7 +782,30 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--sub); marg
 
 /* ---------- 定数 ---------- */
 const APP_NAME = 'Song Seed';
-const APP_VERSION = '2026-11-20'; // 不具合の報告に添える版(更新したら日付を変える)
+// 更新履歴。公開版を更新するたびに先頭へ1件足す(v は重ならない名前。同じ日に2回目なら '2026-11-23b' のように)。
+// アプリを開いたとき、前に開いた版より新しいものを「新しくなりました」で知らせ、一覧の「📝 更新履歴」でいつでも見られる
+const CHANGELOG = [
+  { v: '2026-11-23', items: [
+    '<b>録音の画面でテンポを変えられる</b>ようになりました(− ♩ ＋)。通し録音のテイクがある曲では「録音済みもこのテンポに合わせますか?」と聞き、音の高さはそのままで伸び縮みさせます。元の録音は消えません',
+    'コード入力の「提案」「ディグリー」に、<b>使いどころの説明</b>を付けました(次へ引っぱる・色を借りる など)',
+    'アップデートのお知らせと、一覧の「📝 更新履歴」を付けました',
+  ] },
+  { v: '2026-11-21', items: [
+    '<b>🎸 演奏用モード</b>:大きな文字・自動スクロール・その場で移調・いちばん楽なカポ・画面を暗くしない。表示の大きさ −/＋、速さ20〜300%、コード表示 ON/OFF',
+    '閲覧の画面に「▶ 通し録音を聴く」と、パートの素材録音を鳴らすマイクのボタン',
+    '閲覧の画面の「📄 PDF・共有」で、譜面を PDF にして LINE・AirDrop で送れます',
+    'バックアップの書き出しを確実にしました(iPhone は「共有・"ファイル"に保存」)',
+    '読み込みの結果に、ファイルの中の曲名と書き出した日時を出します。曲の入っていないフォルダは移りません',
+  ] },
+  { v: '2026-11-20', items: [
+    '曲名の下の札(KEY・テンポ・拍子・カポ・チューニング)を押すと、その場で変えられます',
+    'コードの下に TAB(押さえ方)。押すと音が鳴ります。指板から探す・五度圏・ディグリー・スケールからも選べます',
+    '通し録音:トラックの色・記号・たたむ・ピン留め。スマホは帯を長押ししてから動かします',
+    '見本の曲「かえるの歌」、質問チャット、不具合の報告、いちばん楽なカポの提案',
+  ] },
+];
+const APP_VERSION = CHANGELOG[0].v; // 不具合の報告に添える版(更新履歴の先頭と同じ)
+const LS_SEEN = 'songseed.seenVersion';
 const SECTION_TYPES = ['前奏', 'Aメロ', 'Bメロ', 'サビ', 'Cメロ', '間奏', '落ちサビ', '後奏', 'その他'];
 const BAR_DEFAULT_TYPES = ['前奏', '間奏', '後奏'];
 const MAJOR_KEYS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -1448,6 +1478,7 @@ function renderList() {
         <button data-act="import" ${tip('書き出したバックアップを読み込みます。同じ曲は新しい方が残ります')}>読み込み</button>
       </div>
       <p class="backup-note ${warn ? 'warn' : ''}">${esc(note)}</p>
+      <p class="whatsnew-l"><button class="ghost" data-act="changelog" ${tip('これまでのアップデートの内容を見ます')}>📝 更新履歴<small>最新 ${fmtVer(APP_VERSION)}</small></button></p>
       ${!storageOk ? '<p class="backup-note warn">⚠ この端末(またはプライベートブラウズ)では保存ができません。閉じると消えます。</p>' : ''}
       ${renderFolderTabs()}
       ${shown.length ? shown.map((s) => `
@@ -2294,6 +2325,7 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'open-song': go('#song=' + encodeURIComponent(el.dataset.id)); break;
+    case 'changelog': showChangelog(CHANGELOG, '📝 更新履歴'); break;
     case 'back': stopChordSeq(); stopViewPlay(); pmExit(); go(''); break;
     case 'help': openHelp(); break;
     case 'bug': openBugReport(); break;
@@ -4789,6 +4821,7 @@ const FAQ = [
   { k: ['閲覧', '見る', '譜面'], q: '譜面だけを見るには?', a: '右上の切り替えで「<b>👁 閲覧</b>」にすると、編集用のボタンを隠して譜面だけにできます。曲名の下に「▶ 通し録音を聴く」(通し録音があるとき)と「📄 PDF・共有」が出ます。' },
   { k: ['演奏', 'ライブ', 'スクロール', '自動', '弾き'], q: '演奏しながら見るには?', a: '右上の切り替えで「<b>🎸 演奏</b>」にします。文字とコードが大きくなり(「表示の大きさ −/＋」で30〜220%。小さくすると曲全体を見渡せます)、「▶ 自動スクロール」でテンポとコードの長さに合わせて譜面が進みます(速さは −/＋ で20〜300%。動いている最中に変えてもすぐ効きます)。「コード表示 ON/OFF」で歌詞だけにもできます。演奏用モードではTABを押してもコードの音は鳴らず、構成の行も出しません。譜面に触れると止まり、指で位置を合わせてからもう一度押すと続きから進みます。演奏中は画面が暗くなりません。' },
   { k: ['移調', 'キー', 'key', 'カポ', '演奏'], q: '演奏するときだけKEYやカポを変えるには?', a: '「🎸 演奏」の画面の <b>KEY −/＋</b> でその場で移調して表示し、「💡 カポ○がいちばん楽」で押さえやすいカポの形にできます。どちらも<b>曲のデータは変わりません</b>(「元のKEY・カポに戻す」で戻ります)。曲そのものを移調するときは編集の画面の「移調 −1/＋1」です。' },
+  { k: ['更新', 'アップデート', '新しく', '履歴', '変わ'], q: 'アップデートで何が変わったか見るには?', a: '曲の一覧の「<b>📝 更新履歴</b>」で、これまでの更新を見られます。新しい版を初めて開いたときにも「新しくなりました」でお知らせします。' },
   { k: ['テンポ', '速', '遅', 'bpm', '伸', '縮'], q: '録音したあとでテンポを変えるには?', a: '通し録音の画面(再生の行)・パートの録音の画面・曲名の下の「♩」の札で <b>−/＋</b> を押します。通し録音のテイクがあると「録音済みもこのテンポに合わせますか?」と聞くので、「<b>合わせる</b>」なら音の高さはそのままでテイクが伸び縮みし、小節とそろったままになります。元の録音は消えず、テンポを戻して合わせれば元の音に戻ります。±15%を超えると音質が落ちます(確認用)。パートごとの素材録音は録ったときのままです。' },
   { k: ['pdf', '印刷', '共有', 'line', 'airdrop', '送'], q: 'PDFにして送るには?', a: '「👁 閲覧」にして、曲名の下の「<b>📄 PDF・共有</b>」を押します。印刷の画面が開くので、iPhone は右上の共有ボタンから LINE・AirDrop・ファイルへ、Mac は左下の「PDF」から保存できます。' },
   { k: ['再生', '聴', '聞', '素材', '通し', 'マイク'], q: '閲覧の画面で録音を聴くには?', a: '曲全体の<b>通し録音</b>は、曲名の下の横長の「▶ 通し録音を聴く」。パートごとの<b>素材録音</b>は、パート名の横の<b>マイクの丸ボタン</b>で、いちばん新しいテイクが鳴ります(隣の「○本」でテイクの一覧)。' },
@@ -5055,6 +5088,24 @@ if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
   refreshMics();
   navigator.mediaDevices.addEventListener && navigator.mediaDevices.addEventListener('devicechange', () => { refreshMics().then(() => { if (fullView) renderFull(); }); }); // イヤホンを抜き差ししたとき
 }
+const fmtVer = (v) => v.slice(0, 10).replace(/-/g, '/');
+function changelogHTML(list) {
+  return list.map((e) => `<div class="cl-e"><div class="cl-d">${fmtVer(e.v)}</div><ul>${e.items.map((x) => `<li>${x}</li>`).join('')}</ul></div>`).join('');
+}
+function showChangelog(list, title, lead) {
+  return dialog(`<h2>${title}</h2>${lead ? `<p class="muted">${lead}</p>` : ''}<div class="cl-list">${changelogHTML(list)}</div>`, [{ label: 'OK', value: true, cls: 'primary' }]);
+}
+// 開いたとき:前に開いた版より新しい更新があれば知らせる。初めて使う人には出さない(操作説明が先に出るため)
+async function showWhatsNew(hadSongs) {
+  const seen = lsGet(LS_SEEN);
+  if (seen === APP_VERSION) return;
+  lsSet(LS_SEEN, APP_VERSION);
+  if (!seen && !hadSongs) return;
+  const i = seen ? CHANGELOG.findIndex((e) => e.v === seen) : -1;
+  const list = i > 0 ? CHANGELOG.slice(0, i) : CHANGELOG.slice(0, 1);
+  if (!list.length) return;
+  await showChangelog(list, '🆕 Song Seed が新しくなりました', '前に開いたときから、次のことが変わりました。あとから一覧の「📝 更新履歴」でも見られます。');
+}
 (async function start() {
   try {
     db = await openDB();
@@ -5064,7 +5115,9 @@ if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
     console.error(e);
     storageOk = false;
   }
+  const hadSongs = songs.length > 0; // 見本の曲を入れる前に数える(初めての人を見分けるため)
   await route();
+  await showWhatsNew(hadSongs);
   if (!lsGet(LS_TUTORIAL)) openTutorial(0);
   // 見本の曲は、画面を出してから裏で作る(音を作るのに少し時間がかかるため)
   addSampleSong().then((added) => { if (added && !cur && !fullView) renderList(); });
